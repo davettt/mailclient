@@ -76,6 +76,7 @@ export interface MessageList {
 export interface Settings {
   signatures?: Record<string, { text: string; html?: string; enabled: boolean }>;
   defaultView?: 'comfortable' | 'compact';
+  defaultAccountId?: string;
   [key: string]: any;
 }
 

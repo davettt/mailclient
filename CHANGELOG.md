@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0] - 2026-04-27
+
+### Added
+
+- Archive action with "A" keyboard shortcut and toolbar button
+- Default account setting — star an account to auto-select it on launch
+- Keyboard shortcut: Delete/Backspace to trash a message
+
+### Fixed
+
+- Settings API was unreachable (`/:id` catch-all was intercepting `/settings` route)
+- Default account now persists across page refreshes
+- Duplicate messages after folder moves (UID now cleared on local record after IMAP move)
+- Sync deduplication: moved messages get their UID updated instead of creating duplicates
+- Empty Trash now processes all trash-type folders for the account
+- Empty Trash button not appearing after sync (stale `activeFolder` state)
+- Folder counts not updating after refresh/sync
+- Duplicate sidebar folders (e.g. "Trash" and "Deleted Messages") — now deduped using IMAP special-use flags (`\Trash`, `\Archive`, `\Sent`, etc.)
+- Messages in hidden duplicate folders migrated to canonical folders
+
+### Changed
+
+- Folder list API filters duplicate special folders, preferring IMAP-flagged canonical folder
+- Account list in sidebar sorted with default account first
+- Account action icons (default star, remove) only appear on row hover
+
 ## [0.2.0] - 2026-04-27
 
 ### Changed

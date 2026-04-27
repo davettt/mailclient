@@ -4,11 +4,49 @@ import { imapService } from '../services/imap';
 
 const router = Router();
 
+const SPECIAL_FLAGS: Record<string, string> = {
+  sent: '\\\\Sent',
+  drafts: '\\\\Drafts',
+  trash: '\\\\Trash',
+  spam: '\\\\Junk',
+  archive: '\\\\Archive',
+  starred: '\\\\Flagged',
+  all: '\\\\All',
+};
+
 router.get('/:accountId', (req: Request, res: Response) => {
-  const folders = db
+  const allFolders = db
     .prepare('SELECT * FROM folders WHERE account_id = ? ORDER BY type, name')
-    .all(req.params.accountId);
-  res.json(folders);
+    .all(req.params.accountId) as FolderRow[];
+
+  const seen = new Map<string, FolderRow>();
+  const result: FolderRow[] = [];
+
+  for (const folder of allFolders) {
+    const specialFlag = SPECIAL_FLAGS[folder.type];
+    if (!specialFlag) {
+      result.push(folder);
+      continue;
+    }
+
+    const existing = seen.get(folder.type);
+    if (!existing) {
+      seen.set(folder.type, folder);
+      result.push(folder);
+      continue;
+    }
+
+    const hasFlag = (folder.flags || '').includes(specialFlag);
+    const existingHasFlag = (existing.flags || '').includes(specialFlag);
+
+    if (hasFlag && !existingHasFlag) {
+      const idx = result.indexOf(existing);
+      result[idx] = folder;
+      seen.set(folder.type, folder);
+    }
+  }
+
+  res.json(result);
 });
 
 router.post('/:folderId/sync', async (req: Request, res: Response) => {

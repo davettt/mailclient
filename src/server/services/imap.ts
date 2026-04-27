@@ -197,8 +197,24 @@ export class ImapService {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
+      const updateUid = db.prepare(
+        'UPDATE messages SET uid = ? WHERE folder_id = ? AND message_id = ? AND uid IS NULL',
+      );
+
+      const checkExisting = db.prepare(
+        'SELECT id FROM messages WHERE folder_id = ? AND message_id = ?',
+      );
+
       const batchInsert = db.transaction((msgs: any[]) => {
         for (const m of msgs) {
+          const [, , folderId, uid, messageId] = m;
+          if (messageId) {
+            const existing = checkExisting.get(folderId, messageId) as { id: string } | undefined;
+            if (existing) {
+              updateUid.run(uid, folderId, messageId);
+              continue;
+            }
+          }
           insertMsg.run(...m);
         }
       });

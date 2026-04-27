@@ -193,6 +193,45 @@ router.get('/unified', (req: Request, res: Response) => {
   });
 });
 
+// Settings endpoints (must be before /:id catch-all)
+router.get('/settings', (_req: Request, res: Response) => {
+  const rows = db.prepare('SELECT key, value FROM settings').all() as {
+    key: string;
+    value: string;
+  }[];
+  const settings: Record<string, any> = {};
+  for (const row of rows) {
+    try {
+      settings[row.key] = JSON.parse(row.value);
+    } catch {
+      settings[row.key] = row.value;
+    }
+  }
+  res.json(settings);
+});
+
+const settingsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
+
+router.put('/settings', (req: Request, res: Response) => {
+  const parsed = settingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid settings format' });
+    return;
+  }
+
+  const upsert = db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+  );
+  const saveAll = db.transaction((entries: [string, any][]) => {
+    for (const [key, value] of entries) {
+      upsert.run(key, typeof value === 'string' ? value : JSON.stringify(value));
+    }
+  });
+
+  saveAll(Object.entries(parsed.data));
+  res.json({ saved: true });
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   let message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
     | MessageRow
@@ -466,7 +505,10 @@ router.post('/:id/move', async (req: Request, res: Response) => {
       await imapService.moveMessage(account, fromFolder, message.uid, targetFolder.path);
     }
 
-    db.prepare('UPDATE messages SET folder_id = ? WHERE id = ?').run(targetFolder.id, message.id);
+    db.prepare('UPDATE messages SET folder_id = ?, uid = NULL WHERE id = ?').run(
+      targetFolder.id,
+      message.id,
+    );
 
     res.json({ moved: true });
   } catch (err: any) {
@@ -502,7 +544,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
       if (message.uid) {
         await imapService.moveMessage(account, folder, message.uid, trashFolder.path);
       }
-      db.prepare('UPDATE messages SET folder_id = ? WHERE id = ?').run(trashFolder.id, message.id);
+      db.prepare('UPDATE messages SET folder_id = ?, uid = NULL WHERE id = ?').run(
+        trashFolder.id,
+        message.id,
+      );
     } else {
       if (message.uid) {
         await imapService.deleteMessage(account, folder, message.uid);
@@ -542,36 +587,42 @@ router.delete('/trash/:accountId', async (req: Request, res: Response) => {
       return;
     }
 
-    const trashFolder = db
+    const trashFolders = db
       .prepare("SELECT * FROM folders WHERE account_id = ? AND type = 'trash'")
-      .get(account.id) as FolderRow | undefined;
+      .all(account.id) as FolderRow[];
 
-    if (!trashFolder) {
+    if (trashFolders.length === 0) {
       res.json({ deleted: 0 });
       return;
     }
 
-    const trashMessages = db
-      .prepare('SELECT uid FROM messages WHERE folder_id = ? AND uid IS NOT NULL')
-      .all(trashFolder.id) as { uid: number }[];
+    let totalDeleted = 0;
 
-    for (const msg of trashMessages) {
-      try {
-        await imapService.deleteMessage(account, trashFolder, msg.uid);
-      } catch {
-        // continue with remaining messages
+    for (const trashFolder of trashFolders) {
+      const trashMessages = db
+        .prepare('SELECT uid FROM messages WHERE folder_id = ? AND uid IS NOT NULL')
+        .all(trashFolder.id) as { uid: number }[];
+
+      for (const msg of trashMessages) {
+        try {
+          await imapService.deleteMessage(account, trashFolder, msg.uid);
+        } catch {
+          // continue with remaining messages
+        }
       }
+
+      const deleted = db
+        .prepare('SELECT COUNT(*) as count FROM messages WHERE folder_id = ?')
+        .get(trashFolder.id) as { count: number };
+      totalDeleted += deleted.count;
+
+      db.prepare('DELETE FROM messages WHERE folder_id = ?').run(trashFolder.id);
+      db.prepare('UPDATE folders SET total_messages = 0, unread_messages = 0 WHERE id = ?').run(
+        trashFolder.id,
+      );
     }
 
-    const deleted = db
-      .prepare('SELECT COUNT(*) as count FROM messages WHERE folder_id = ?')
-      .get(trashFolder.id) as { count: number };
-    db.prepare('DELETE FROM messages WHERE folder_id = ?').run(trashFolder.id);
-    db.prepare('UPDATE folders SET total_messages = 0, unread_messages = 0 WHERE id = ?').run(
-      trashFolder.id,
-    );
-
-    res.json({ deleted: deleted.count });
+    res.json({ deleted: totalDeleted });
   } catch (err: any) {
     console.error('Failed to empty trash:', err);
     res.status(500).json({ error: 'Failed to empty trash' });
@@ -682,45 +733,6 @@ router.post('/send', async (req: Request, res: Response) => {
     console.error('Failed to send message:', err);
     res.status(500).json({ error: 'Failed to send message' });
   }
-});
-
-// Settings endpoints
-router.get('/settings', (_req: Request, res: Response) => {
-  const rows = db.prepare('SELECT key, value FROM settings').all() as {
-    key: string;
-    value: string;
-  }[];
-  const settings: Record<string, any> = {};
-  for (const row of rows) {
-    try {
-      settings[row.key] = JSON.parse(row.value);
-    } catch {
-      settings[row.key] = row.value;
-    }
-  }
-  res.json(settings);
-});
-
-const settingsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
-
-router.put('/settings', (req: Request, res: Response) => {
-  const parsed = settingsSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid settings format' });
-    return;
-  }
-
-  const upsert = db.prepare(
-    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-  );
-  const saveAll = db.transaction((entries: [string, any][]) => {
-    for (const [key, value] of entries) {
-      upsert.run(key, typeof value === 'string' ? value : JSON.stringify(value));
-    }
-  });
-
-  saveAll(Object.entries(parsed.data));
-  res.json({ saved: true });
 });
 
 export default router;

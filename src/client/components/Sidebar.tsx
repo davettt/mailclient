@@ -18,6 +18,8 @@ interface SidebarProps {
   unifiedActive: boolean;
   onShowUnified: () => void;
   onEmptyTrash: () => void;
+  defaultAccountId: string | null;
+  onSetDefault: (a: Account) => void;
   theme: Theme;
   themeSetting: ThemeSetting;
   onCycleTheme: () => void;
@@ -38,12 +40,19 @@ export default function Sidebar({
   unifiedActive,
   onShowUnified,
   onEmptyTrash,
+  defaultAccountId,
+  onSetDefault,
   theme,
   themeSetting,
   onCycleTheme,
 }: SidebarProps) {
   const sorted = sortFolders(folders);
   const isTrashActive = activeFolder?.type === 'trash';
+  const sortedAccounts = [...accounts].sort((a, b) => {
+    if (a.id === defaultAccountId) return -1;
+    if (b.id === defaultAccountId) return 1;
+    return 0;
+  });
 
   return (
     <aside
@@ -327,98 +336,124 @@ export default function Sidebar({
           padding: '10px 12px',
         }}
       >
-        {accounts.map((acc) => (
-          <button
-            key={acc.id}
-            onClick={() => onSelectAccount(acc)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              width: '100%',
-              padding: '8px 6px',
-              background: activeAccount?.id === acc.id ? 'var(--bg-active)' : 'transparent',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-primary)',
-              fontSize: 12,
-              cursor: 'pointer',
-              textAlign: 'left',
-              transition: 'background 0.1s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background =
-                activeAccount?.id === acc.id ? 'var(--bg-active)' : 'transparent')
-            }
-          >
-            <div
+        {sortedAccounts.map((acc) => {
+          const isDefault = acc.id === defaultAccountId;
+          return (
+            <button
+              key={acc.id}
+              className="account-row"
+              onClick={() => onSelectAccount(acc)}
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--accent-dim)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--accent)',
-              }}
-            >
-              {acc.name[0]?.toUpperCase() || '?'}
-            </div>
-            <div style={{ overflow: 'hidden', flex: 1 }}>
-              <div
-                style={{
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {acc.name}
-              </div>
-              <div
-                style={{
-                  color: 'var(--text-tertiary)',
-                  fontSize: 11,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {acc.email}
-              </div>
-            </div>
-            <span
-              title="Remove account"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteAccount(acc);
-              }}
-              style={{
-                fontSize: 14,
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                padding: '2px 4px',
+                gap: 10,
+                width: '100%',
+                padding: '8px 6px',
+                background: activeAccount?.id === acc.id ? 'var(--bg-active)' : 'transparent',
+                border: 'none',
                 borderRadius: 'var(--radius-sm)',
-                opacity: 0.4,
-                transition: 'opacity 0.15s, color 0.15s',
+                color: 'var(--text-primary)',
+                fontSize: 12,
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'background 0.1s',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '1';
-                e.currentTarget.style.color = 'var(--red)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '0.4';
-                e.currentTarget.style.color = 'var(--text-tertiary)';
-              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background =
+                  activeAccount?.id === acc.id ? 'var(--bg-active)' : 'transparent')
+              }
             >
-              ✕
-            </span>
-          </button>
-        ))}
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--accent-dim)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--accent)',
+                }}
+              >
+                {acc.name[0]?.toUpperCase() || '?'}
+              </div>
+              <div style={{ overflow: 'hidden', flex: 1 }}>
+                <div
+                  style={{
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {acc.name}
+                </div>
+                <div
+                  style={{
+                    color: 'var(--text-tertiary)',
+                    fontSize: 11,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {acc.email}
+                </div>
+              </div>
+              <span
+                className={`account-action${isDefault ? ' is-default' : ''}`}
+                title={isDefault ? 'Remove as default' : 'Set as default'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSetDefault(acc);
+                }}
+                style={{
+                  fontSize: 12,
+                  color: isDefault ? 'var(--accent)' : 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill={isDefault ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              </span>
+              <span
+                className="account-action"
+                title="Remove account"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteAccount(acc);
+                }}
+                style={{
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--red)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+              >
+                ✕
+              </span>
+            </button>
+          );
+        })}
         <button
           onClick={onAddAccount}
           style={{

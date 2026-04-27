@@ -55,6 +55,7 @@ export default function App() {
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [themeSetting, setThemeSetting] = useState<ThemeSetting>(getSavedThemeSetting);
   const theme = resolveTheme(themeSetting);
+  const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
@@ -100,6 +101,18 @@ export default function App() {
       .catch(() => {});
   };
 
+  const setDefaultAccount = async (acc: Account) => {
+    const newId = defaultAccountId === acc.id ? null : acc.id;
+    setDefaultAccountId(newId);
+    try {
+      const settings = await api.settings.get();
+      await api.settings.save({ ...settings, defaultAccountId: newId || '' });
+      notify(newId ? `${acc.name} set as default` : 'Default account cleared', 'info');
+    } catch {
+      notify('Failed to save default', 'error');
+    }
+  };
+
   // ─── Keyboard shortcuts ───
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -109,6 +122,10 @@ export default function App() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && fullMessage) {
         e.preventDefault();
         deleteMessage(fullMessage);
+      }
+      if ((e.key === 'a' || e.key === 'A') && !e.metaKey && !e.ctrlKey && fullMessage) {
+        e.preventDefault();
+        archiveMessage(fullMessage);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -130,7 +147,16 @@ export default function App() {
       const accs = await api.accounts.list();
       setAccounts(accs);
       if (accs.length > 0 && !activeAccount) {
-        selectAccount(accs[0]);
+        try {
+          const settings = await api.settings.get();
+          if (settings.defaultAccountId) setDefaultAccountId(settings.defaultAccountId);
+          const defaultAcc = settings.defaultAccountId
+            ? accs.find((a) => a.id === settings.defaultAccountId)
+            : null;
+          selectAccount(defaultAcc || accs[0]);
+        } catch {
+          selectAccount(accs[0]);
+        }
       }
       if (accs.length === 0) {
         setShowAddAccount(true);
@@ -165,8 +191,9 @@ export default function App() {
   };
 
   // ─── Select folder → load messages (auto-sync if never synced) ───
-  const selectFolder = async (folder: Folder, _account?: Account) => {
-    setActiveFolder(folder);
+  const selectFolder = async (f: Folder, _account?: Account) => {
+    let folder = f;
+    setActiveFolder(f);
     setShowStarred(false);
     setShowUnified(false);
     setSelectedMessage(null);
@@ -182,13 +209,20 @@ export default function App() {
         syncedFolderIds.current.add(folder.id);
         if (result.folder) {
           setFolders((prev) => prev.map((f) => (f.id === folder.id ? result.folder : f)));
+          setActiveFolder(result.folder);
+          folder = result.folder;
         }
       } catch {
         // fall through to load whatever is in DB
       }
     }
 
-    await loadMessages(folder.id, 1);
+    const data = await loadMessages(folder.id, 1);
+    if (data) {
+      const updated = { ...folder, total_messages: data.total };
+      setActiveFolder(updated);
+      setFolders((prev) => prev.map((f) => (f.id === folder.id ? updated : f)));
+    }
   };
 
   const loadMessages = async (folderId: string, p: number) => {
@@ -199,10 +233,13 @@ export default function App() {
       setTotalMessages(data.total);
       setPage(data.page);
       setPages(data.pages);
+      setLoadingMessages(false);
+      return data;
     } catch {
       notify('Failed to load messages', 'error');
     }
     setLoadingMessages(false);
+    return null;
   };
 
   // ─── Unified inbox ───
@@ -376,6 +413,28 @@ export default function App() {
     }
   };
 
+  // ─── Archive ───
+  const archiveMessage = async (msg: Message) => {
+    const archiveFolder = folders.find((f) => f.type === 'archive');
+    if (!archiveFolder) {
+      notify('No archive folder found', 'error');
+      return;
+    }
+    if (msg.folder_id === archiveFolder.id) return;
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    if (selectedMessage?.id === msg.id) {
+      setSelectedMessage(null);
+      setFullMessage(null);
+    }
+    try {
+      await api.messages.move(msg.id, archiveFolder.id);
+      notify('Archived', 'info');
+    } catch {
+      notify('Failed to archive', 'error');
+      reloadCurrentView();
+    }
+  };
+
   // ─── Move to folder ───
   const moveMessage = async (msg: Message, folderId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== msg.id));
@@ -405,6 +464,10 @@ export default function App() {
       notify(`Trash emptied (${result.deleted} messages)`, 'info');
       const flds = await api.folders.list(activeAccount.id);
       setFolders(flds);
+      if (activeFolder) {
+        const updated = flds.find((f) => f.id === activeFolder.id);
+        if (updated) setActiveFolder(updated);
+      }
     } catch {
       notify('Failed to empty trash', 'error');
     }
@@ -505,9 +568,13 @@ export default function App() {
     setRefreshing(true);
     try {
       await api.folders.sync(activeFolder.id);
-      await loadMessages(activeFolder.id, page);
+      const data = await loadMessages(activeFolder.id, page);
       const flds = await api.folders.list(activeAccount.id);
       setFolders(flds);
+      const updatedActive = flds.find((f) => f.id === activeFolder.id);
+      if (updatedActive) {
+        setActiveFolder(data ? { ...updatedActive, total_messages: data.total } : updatedActive);
+      }
     } catch {
       notify('Sync failed', 'error');
     }
@@ -582,6 +649,8 @@ export default function App() {
           unifiedActive={showUnified}
           onShowUnified={showUnifiedInbox}
           onEmptyTrash={emptyTrash}
+          defaultAccountId={defaultAccountId}
+          onSetDefault={setDefaultAccount}
           theme={theme}
           themeSetting={themeSetting}
           onCycleTheme={cycleTheme}
@@ -623,6 +692,7 @@ export default function App() {
           onReplyAll={handleReplyAll}
           onForward={handleForward}
           onDelete={deleteMessage}
+          onArchive={archiveMessage}
           onToggleStar={toggleStar}
           onSpam={markSpam}
           onMove={moveMessage}
