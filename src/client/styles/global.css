@@ -1,0 +1,227 @@
+:root {
+  --bg-primary: #0c0c0c;
+  --bg-surface: #141414;
+  --bg-elevated: #1c1c1c;
+  --bg-hover: #222222;
+  --bg-active: #2a2a2a;
+
+  --border: #262626;
+  --border-subtle: #1a1a1a;
+
+  --text-primary: #e8e4df;
+  --text-secondary: #9a958f;
+  --text-tertiary: #5e5a55;
+  --text-strong: #ffffff;
+
+  --accent: #d4944a;
+  --accent-dim: rgba(212, 148, 74, 0.12);
+  --accent-border: rgba(212, 148, 74, 0.25);
+  --accent-text: #0c0c0c;
+
+  --red: #d95b4e;
+  --green: #4aa88c;
+  --blue: #5a8ce8;
+  --purple: #9b6bd4;
+
+  --backdrop: rgba(0, 0, 0, 0.65);
+
+  --font-body: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+
+  --sidebar-width: 240px;
+  --header-height: 52px;
+}
+
+[data-theme='light'] {
+  --bg-primary: #f8f7f5;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f0eeeb;
+  --bg-hover: #e8e5e1;
+  --bg-active: #e0ddd8;
+
+  --border: #d8d4cf;
+  --border-subtle: #eae7e3;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6560;
+  --text-tertiary: #9a958f;
+  --text-strong: #111111;
+
+  --accent: #c0823a;
+  --accent-dim: rgba(192, 130, 58, 0.1);
+  --accent-border: rgba(192, 130, 58, 0.3);
+  --accent-text: #ffffff;
+
+  --red: #c74a3e;
+  --green: #3d9478;
+  --blue: #4a7ad4;
+  --purple: #8558c0;
+
+  --backdrop: rgba(0, 0, 0, 0.3);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.12);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease both;
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* TipTap editor */
+.compose-editor .tiptap {
+  outline: none;
+  min-height: 180px;
+  padding: 14px 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.compose-editor .tiptap p {
+  margin: 0 0 0.4em;
+}
+
+.compose-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+.compose-editor .tiptap ul,
+.compose-editor .tiptap ol {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+
+.compose-editor .tiptap blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+  margin: 0.4em 0;
+  color: var(--text-secondary);
+}
+
+.compose-editor .tiptap a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.compose-editor .tiptap code {
+  background: var(--bg-elevated);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.compose-editor .tiptap pre {
+  background: var(--bg-elevated);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-x: auto;
+}

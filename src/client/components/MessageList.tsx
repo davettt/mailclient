@@ -1,0 +1,437 @@
+import React from 'react';
+import { Message } from '../hooks/api';
+import { timeAgo, extractName, getInitial, avatarColor } from '../hooks/utils';
+
+interface MessageListProps {
+  messages: Message[];
+  selectedId: string | null;
+  onSelect: (m: Message) => void;
+  onToggleStar: (m: Message) => void;
+  title: string;
+  loading: boolean;
+  total: number;
+  page: number;
+  pages: number;
+  onPageChange: (p: number) => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+  showAccountBadge?: boolean;
+}
+
+export default function MessageList({
+  messages,
+  selectedId,
+  onSelect,
+  onToggleStar,
+  title,
+  loading,
+  total,
+  page,
+  pages,
+  onPageChange,
+  searchQuery,
+  onSearchChange,
+  onRefresh,
+  refreshing,
+  showAccountBadge,
+}: MessageListProps) {
+  return (
+    <div
+      style={{
+        width: 380,
+        height: '100%',
+        borderRight: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        background: 'var(--bg-primary)',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          height: 'var(--header-height)',
+          padding: '0 16px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{title}</h2>
+          {total > 0 && (
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {total} message{total !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onRefresh}
+          title="Sync"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-tertiary)',
+            cursor: 'pointer',
+            padding: 6,
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={refreshing ? 'animate-spin' : ''}
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Search */}
+      <div
+        style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid var(--border-subtle)',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'var(--bg-elevated)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '7px 10px',
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--text-tertiary)"
+            strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search messages..."
+            style={{
+              flex: 1,
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-tertiary)',
+                cursor: 'pointer',
+                fontSize: 16,
+                lineHeight: 1,
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading && messages.length === 0 ? (
+          <div
+            style={{
+              padding: 40,
+              textAlign: 'center',
+              color: 'var(--text-tertiary)',
+              fontSize: 13,
+            }}
+          >
+            Loading messages...
+          </div>
+        ) : messages.length === 0 ? (
+          <div
+            style={{
+              padding: 40,
+              textAlign: 'center',
+              color: 'var(--text-tertiary)',
+              fontSize: 13,
+            }}
+          >
+            {searchQuery ? 'No results found' : 'No messages'}
+          </div>
+        ) : (
+          messages.map((msg, idx) => {
+            const isSelected = selectedId === msg.id;
+            const isUnread = !msg.is_read;
+            const name = extractName(msg.from_name, msg.from_address);
+
+            return (
+              <div
+                key={msg.id}
+                onClick={() => onSelect(msg)}
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  padding: '12px 14px',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  cursor: 'pointer',
+                  background: isSelected
+                    ? 'var(--bg-active)'
+                    : isUnread
+                      ? 'rgba(212,148,74,0.03)'
+                      : 'transparent',
+                  borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+                  transition: 'background 0.1s',
+                  animation: `fadeIn 0.2s ease ${Math.min(idx * 0.02, 0.3)}s both`,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected)
+                    e.currentTarget.style.background = isUnread
+                      ? 'rgba(212,148,74,0.03)'
+                      : 'transparent';
+                }}
+              >
+                {/* Avatar */}
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 'var(--radius-sm)',
+                    background: avatarColor(msg.from_address),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#fff',
+                    flexShrink: 0,
+                  }}
+                >
+                  {getInitial(name)}
+                </div>
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                      marginBottom: 2,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: isUnread ? 600 : 400,
+                        fontSize: 13,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: isUnread ? 'var(--text-strong)' : 'var(--text-primary)',
+                      }}
+                    >
+                      {name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--text-tertiary)',
+                        fontFamily: 'var(--font-mono)',
+                        flexShrink: 0,
+                        marginLeft: 8,
+                      }}
+                    >
+                      {timeAgo(msg.date)}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: isUnread ? 500 : 400,
+                      color: isUnread ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginBottom: 2,
+                    }}
+                  >
+                    {msg.has_attachments ? '📎 ' : ''}
+                    {msg.subject || '(no subject)'}
+                    {msg.thread_count && msg.thread_count > 1 && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontFamily: 'var(--font-mono)',
+                          color: 'var(--text-tertiary)',
+                          background: 'var(--bg-elevated)',
+                          padding: '1px 5px',
+                          borderRadius: 3,
+                          marginLeft: 6,
+                          verticalAlign: 'middle',
+                        }}
+                      >
+                        {msg.thread_count}
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    {showAccountBadge && msg.account_email && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontFamily: 'var(--font-mono)',
+                          color: 'var(--text-tertiary)',
+                          background: 'var(--bg-elevated)',
+                          padding: '1px 5px',
+                          borderRadius: 3,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {msg.account_email}
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: 'var(--text-tertiary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        flex: 1,
+                      }}
+                    >
+                      {msg.snippet}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Star */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleStar(msg);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 2,
+                    color: msg.is_starred ? 'var(--accent)' : 'var(--text-tertiary)',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    fontSize: 14,
+                    opacity: msg.is_starred ? 1 : 0.3,
+                    transition: 'opacity 0.15s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.opacity = msg.is_starred ? '1' : '0.3')
+                  }
+                >
+                  {msg.is_starred ? '★' : '☆'}
+                </button>
+              </div>
+            );
+          })
+        )}
+
+        {/* Pagination */}
+        {pages > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '16px',
+              borderTop: '1px solid var(--border-subtle)',
+            }}
+          >
+            <button
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              style={{
+                padding: '6px 14px',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                color: page <= 1 ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                cursor: page <= 1 ? 'default' : 'pointer',
+                fontSize: 12,
+              }}
+            >
+              Prev
+            </button>
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                padding: '6px 8px',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {page}/{pages}
+            </span>
+            <button
+              disabled={page >= pages}
+              onClick={() => onPageChange(page + 1)}
+              style={{
+                padding: '6px 14px',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                color: page >= pages ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                cursor: page >= pages ? 'default' : 'pointer',
+                fontSize: 12,
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

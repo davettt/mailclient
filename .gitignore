@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.last-build
+
+# Environment
+.env
+.env.*
+
+# Data
+local_data/
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+CLAUDE.md

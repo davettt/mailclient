@@ -1,0 +1,17 @@
+{
+  "name": "Mail Client",
+  "short_name": "Mail",
+  "description": "Lightweight local email client",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0C0C0C",
+  "theme_color": "#0C0C0C",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
