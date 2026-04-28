@@ -3,6 +3,12 @@ import MailComposer from 'nodemailer/lib/mail-composer';
 import { AccountRow } from '../db/database';
 import { decrypt } from '../utils/crypto';
 
+interface SendAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 interface SendOpts {
   to: string;
   cc?: string;
@@ -12,12 +18,13 @@ interface SendOpts {
   html?: string;
   inReplyTo?: string;
   references?: string;
+  attachments?: SendAttachment[];
 }
 
 export class SmtpService {
   async send(account: AccountRow, opts: SendOpts): Promise<Buffer> {
     const mailOpts = {
-      from: `"${account.name}" <${account.email}>`,
+      from: { name: account.name, address: account.email },
       to: opts.to,
       cc: opts.cc || undefined,
       bcc: opts.bcc || undefined,
@@ -26,6 +33,11 @@ export class SmtpService {
       html: opts.html || undefined,
       inReplyTo: opts.inReplyTo || undefined,
       references: opts.references || undefined,
+      attachments: opts.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     };
 
     const transporter = nodemailer.createTransport({

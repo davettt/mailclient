@@ -26,6 +26,12 @@ export function formatDate(epoch: number): string {
   });
 }
 
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
 export function extractName(from: string | null, addr: string): string {
   if (from && from.trim()) return from.trim();
   return addr.split('@')[0];

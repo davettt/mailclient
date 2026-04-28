@@ -18,6 +18,13 @@ interface MessageListProps {
   onRefresh: () => void;
   refreshing: boolean;
   showAccountBadge?: boolean;
+  checkedIds: Set<string>;
+  onCheck: (msgId: string, checked: boolean, shiftKey: boolean) => void;
+  onBulkDelete: () => void;
+  onBulkArchive: () => void;
+  onBulkMarkRead: (read: boolean) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
 }
 
 export default function MessageList({
@@ -36,7 +43,16 @@ export default function MessageList({
   onRefresh,
   refreshing,
   showAccountBadge,
+  checkedIds,
+  onCheck,
+  onBulkDelete,
+  onBulkArchive,
+  onBulkMarkRead,
+  onSelectAll,
+  onDeselectAll,
 }: MessageListProps) {
+  const hasChecked = checkedIds.size > 0;
+  const allChecked = messages.length > 0 && messages.every((m) => checkedIds.has(m.id));
   return (
     <div
       style={{
@@ -75,38 +91,83 @@ export default function MessageList({
             </span>
           )}
         </div>
-        <button
-          onClick={onRefresh}
-          title="Sync"
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-tertiary)',
-            cursor: 'pointer',
-            padding: 6,
-            borderRadius: 'var(--radius-sm)',
-            display: 'flex',
-            alignItems: 'center',
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={refreshing ? 'animate-spin' : ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {messages.length > 0 && (
+            <button
+              onClick={allChecked ? onDeselectAll : onSelectAll}
+              title={allChecked ? 'Deselect all' : 'Select all'}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: allChecked ? 'var(--blue)' : 'var(--text-tertiary)',
+                cursor: 'pointer',
+                padding: 6,
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (!allChecked) e.currentTarget.style.color = 'var(--text-secondary)';
+              }}
+              onMouseLeave={(e) => {
+                if (!allChecked) e.currentTarget.style.color = 'var(--text-tertiary)';
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {allChecked ? (
+                  <>
+                    <rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" />
+                    <polyline points="9 11 12 14 22 4" stroke="var(--bg-primary)" strokeWidth="3" />
+                  </>
+                ) : (
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                )}
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={onRefresh}
+            title="Sync"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-tertiary)',
+              cursor: 'pointer',
+              padding: 6,
+              borderRadius: 'var(--radius-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
           >
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
-          </svg>
-        </button>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={refreshing ? 'animate-spin' : ''}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -170,6 +231,128 @@ export default function MessageList({
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {hasChecked && (
+        <div
+          style={{
+            padding: '6px 12px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'var(--bg-elevated)',
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 12,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-secondary)',
+              marginRight: 4,
+            }}
+          >
+            {checkedIds.size} selected
+          </span>
+          <button
+            onClick={onBulkArchive}
+            title="Archive selected"
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px 10px',
+              fontSize: 12,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="21 8 21 21 3 21 3 8" />
+              <rect x="1" y="3" width="22" height="5" />
+              <line x1="10" y1="12" x2="14" y2="12" />
+            </svg>
+            Archive
+          </button>
+          <button
+            onClick={onBulkDelete}
+            title="Delete selected"
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px 10px',
+              fontSize: 12,
+              color: 'var(--red)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4h6v2" />
+            </svg>
+            Delete
+          </button>
+          <button
+            onClick={() => onBulkMarkRead(true)}
+            title="Mark selected as read"
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px 10px',
+              fontSize: 12,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            Mark read
+          </button>
+          <button
+            onClick={() => onBulkMarkRead(false)}
+            title="Mark selected as unread"
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px 10px',
+              fontSize: 12,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            Mark unread
+          </button>
+        </div>
+      )}
+
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading && messages.length === 0 ? (
@@ -198,11 +381,13 @@ export default function MessageList({
           messages.map((msg, idx) => {
             const isSelected = selectedId === msg.id;
             const isUnread = !msg.is_read;
+            const isChecked = checkedIds.has(msg.id);
             const name = extractName(msg.from_name, msg.from_address);
 
             return (
               <div
                 key={msg.id}
+                className="msg-row"
                 onClick={() => onSelect(msg)}
                 style={{
                   display: 'flex',
@@ -210,42 +395,90 @@ export default function MessageList({
                   padding: '12px 14px',
                   borderBottom: '1px solid var(--border-subtle)',
                   cursor: 'pointer',
-                  background: isSelected
+                  background: isChecked
                     ? 'var(--bg-active)'
-                    : isUnread
-                      ? 'rgba(212,148,74,0.03)'
-                      : 'transparent',
+                    : isSelected
+                      ? 'var(--bg-active)'
+                      : isUnread
+                        ? 'rgba(212,148,74,0.03)'
+                        : 'transparent',
                   borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
                   transition: 'background 0.1s',
                   animation: `fadeIn 0.2s ease ${Math.min(idx * 0.02, 0.3)}s both`,
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)';
+                  if (!isSelected && !isChecked)
+                    e.currentTarget.style.background = 'var(--bg-hover)';
                 }}
                 onMouseLeave={(e) => {
-                  if (!isSelected)
+                  if (!isSelected && !isChecked)
                     e.currentTarget.style.background = isUnread
                       ? 'rgba(212,148,74,0.03)'
                       : 'transparent';
                 }}
               >
-                {/* Avatar */}
+                {/* Avatar / Checkbox */}
                 <div
+                  className="msg-avatar-wrap"
                   style={{
                     width: 36,
                     height: 36,
                     borderRadius: 'var(--radius-sm)',
-                    background: avatarColor(msg.from_address),
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: '#fff',
                     flexShrink: 0,
+                    position: 'relative',
+                    cursor: 'pointer',
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCheck(msg.id, !isChecked, e.shiftKey);
                   }}
                 >
-                  {getInitial(name)}
+                  <div
+                    className={isChecked ? 'msg-avatar is-hidden' : 'msg-avatar'}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 'var(--radius-sm)',
+                      background: avatarColor(msg.from_address),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#fff',
+                    }}
+                  >
+                    {getInitial(name)}
+                  </div>
+                  <div
+                    className={isChecked ? 'msg-checkbox is-checked' : 'msg-checkbox'}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 'var(--radius-sm)',
+                      background: isChecked ? 'var(--blue)' : 'var(--bg-elevated)',
+                      border: isChecked ? 'none' : '2px solid var(--border)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                    }}
+                  >
+                    {isChecked && (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
 
                 {/* Content */}

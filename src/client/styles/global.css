@@ -186,6 +186,27 @@ a {
   opacity: 1 !important;
 }
 
+/* Message row — checkbox on avatar hover */
+.msg-avatar-wrap .msg-checkbox {
+  display: none !important;
+}
+.msg-avatar-wrap .msg-avatar {
+  display: flex !important;
+}
+.msg-avatar-wrap:hover .msg-checkbox {
+  display: flex !important;
+}
+.msg-avatar-wrap:hover .msg-avatar {
+  display: none !important;
+}
+.msg-avatar-wrap .msg-checkbox.is-checked {
+  display: flex !important;
+}
+.msg-avatar-wrap .msg-checkbox.is-checked + .msg-avatar,
+.msg-avatar-wrap .msg-avatar.is-hidden {
+  display: none !important;
+}
+
 /* TipTap editor */
 .compose-editor .tiptap {
   outline: none;

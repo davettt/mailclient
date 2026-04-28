@@ -70,13 +70,35 @@ function hasAttachmentParts(structure: any): boolean {
   return false;
 }
 
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class ImapService {
   private connections: Map<string, ImapFlow> = new Map();
+  private idleTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+  private touchIdle(accountId: string) {
+    const existing = this.idleTimers.get(accountId);
+    if (existing) clearTimeout(existing);
+    this.idleTimers.set(
+      accountId,
+      setTimeout(() => {
+        const client = this.connections.get(accountId);
+        if (client) {
+          client.logout().catch(() => {});
+          this.connections.delete(accountId);
+          this.idleTimers.delete(accountId);
+        }
+      }, IDLE_TIMEOUT_MS),
+    );
+  }
 
   async connect(account: AccountRow): Promise<ImapFlow> {
     if (this.connections.has(account.id)) {
       const existing = this.connections.get(account.id)!;
-      if (existing.usable) return existing;
+      if (existing.usable) {
+        this.touchIdle(account.id);
+        return existing;
+      }
       this.connections.delete(account.id);
     }
 
@@ -96,10 +118,14 @@ export class ImapService {
 
     await client.connect();
     this.connections.set(account.id, client);
+    this.touchIdle(account.id);
     return client;
   }
 
   async disconnect(accountId: string): Promise<void> {
+    const timer = this.idleTimers.get(accountId);
+    if (timer) clearTimeout(timer);
+    this.idleTimers.delete(accountId);
     const client = this.connections.get(accountId);
     if (client) {
       await client.logout().catch(() => {});
@@ -289,9 +315,10 @@ export class ImapService {
         )
         .all(account.id, folder.id) as { uid: number }[];
 
-      if (localUids.length > 0) {
+      if (localUids.length > 0 && localUids.length <= 5000) {
         try {
-          const searchResult = await client.search({ all: true }, { uid: true });
+          const maxLocalUid = Math.max(...localUids.map((u) => u.uid));
+          const searchResult = await client.search({ uid: `1:${maxLocalUid}` }, { uid: true });
           const serverUidSet = new Set(Array.isArray(searchResult) ? searchResult : []);
           const removed: number[] = [];
           for (const { uid } of localUids) {
@@ -310,10 +337,15 @@ export class ImapService {
         }
       }
 
-      // Also sync flag changes (read/starred) for existing messages
-      if (lastUid > 0) {
+      // Sync flag changes for locally-known UIDs only
+      if (lastUid > 0 && localUids.length > 0) {
         try {
-          for await (const msg of client.fetch({ uid: '1:*' }, { flags: true, uid: true })) {
+          const uidList = localUids.map((u) => u.uid);
+          const maxUid = Math.max(...uidList);
+          for await (const msg of client.fetch(
+            { uid: `1:${maxUid}` },
+            { flags: true, uid: true },
+          )) {
             const flags = Array.from(msg.flags || []);
             const isRead = flags.includes('\\Seen') ? 1 : 0;
             const isStarred = flags.includes('\\Flagged') ? 1 : 0;
@@ -372,10 +404,12 @@ export class ImapService {
             )
           : null;
 
+        const hasAtts = parsed.attachments && parsed.attachments.length > 0;
         db.prepare(
           `UPDATE messages
            SET body_text = ?, body_html = ?, snippet = ?,
-               raw_headers = ?, raw_source = ?, "references" = ?
+               raw_headers = ?, raw_source = ?, "references" = ?,
+               has_attachments = ?
            WHERE id = ?`,
         ).run(
           parsed.text || null,
@@ -384,8 +418,31 @@ export class ImapService {
           rawHeaders || null,
           msg.source.toString() || null,
           refs,
+          hasAtts ? 1 : 0,
           dbId,
         );
+
+        if (parsed.attachments && parsed.attachments.length > 0) {
+          db.prepare('DELETE FROM attachments WHERE message_id = ?').run(dbId);
+          const insertAtt = db.prepare(
+            'INSERT INTO attachments (id, message_id, filename, content_type, size, content_id, content) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          );
+          const saveAtts = db.transaction(() => {
+            for (const att of parsed.attachments) {
+              insertAtt.run(
+                uuid(),
+                dbId,
+                att.filename || 'unnamed',
+                att.contentType || 'application/octet-stream',
+                att.size || (att.content ? att.content.length : 0),
+                att.cid || null,
+                att.content || null,
+              );
+            }
+          });
+          saveAtts();
+        }
+
         return;
       }
     } finally {
@@ -458,6 +515,10 @@ export class ImapService {
   }
 
   async disconnectAll(): Promise<void> {
+    for (const [, timer] of this.idleTimers) {
+      clearTimeout(timer);
+    }
+    this.idleTimers.clear();
     for (const [, client] of this.connections) {
       await client.logout().catch(() => {});
     }

@@ -12,6 +12,7 @@ type ComposeState = {
   subject: string;
   body: string;
   inReplyTo?: string;
+  forwardAttachments?: import('./hooks/api').Attachment[];
 } | null;
 
 export type ThemeSetting = 'dark' | 'light' | 'auto';
@@ -63,6 +64,9 @@ export default function App() {
     onConfirm: () => void;
   } | null>(null);
 
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const lastCheckedId = useRef<string | null>(null);
+
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
   const syncedFolderIds = useRef<Set<string>>(new Set());
 
@@ -113,19 +117,59 @@ export default function App() {
     }
   };
 
+  // ─── Checkbox toggle with shift-click range ───
+  const handleCheck = (msgId: string, checked: boolean, shiftKey: boolean) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (shiftKey && lastCheckedId.current) {
+        const ids = messages.map((m) => m.id);
+        const start = ids.indexOf(lastCheckedId.current);
+        const end = ids.indexOf(msgId);
+        if (start !== -1 && end !== -1) {
+          const [lo, hi] = start < end ? [start, end] : [end, start];
+          for (let i = lo; i <= hi; i++) {
+            next.add(ids[i]);
+          }
+        }
+      } else if (checked) {
+        next.add(msgId);
+      } else {
+        next.delete(msgId);
+      }
+      lastCheckedId.current = msgId;
+      return next;
+    });
+  };
+
   // ─── Keyboard shortcuts ───
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (showCompose || showAddAccount || confirmDialog) return;
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && fullMessage) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (checkedIds.size > 0 || fullMessage)) {
         e.preventDefault();
-        deleteMessage(fullMessage);
+        if (checkedIds.size > 0) {
+          bulkDelete();
+        } else if (fullMessage) {
+          deleteMessage(fullMessage);
+        }
       }
-      if ((e.key === 'a' || e.key === 'A') && !e.metaKey && !e.ctrlKey && fullMessage) {
+      if (
+        (e.key === 'a' || e.key === 'A') &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        (checkedIds.size > 0 || fullMessage)
+      ) {
         e.preventDefault();
-        archiveMessage(fullMessage);
+        if (checkedIds.size > 0) {
+          bulkArchive();
+        } else if (fullMessage) {
+          archiveMessage(fullMessage);
+        }
+      }
+      if (e.key === 'Escape' && checkedIds.size > 0) {
+        setCheckedIds(new Set());
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -139,6 +183,9 @@ export default function App() {
       .buildStatus()
       .then((s) => setBuildStale(s.buildStale))
       .catch(() => {});
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -175,6 +222,7 @@ export default function App() {
     setFullMessage(null);
     setShowStarred(false);
     setShowUnified(false);
+    setCheckedIds(new Set());
 
     try {
       const flds = await api.folders.list(acc.id);
@@ -201,6 +249,7 @@ export default function App() {
     setThreadMessages(null);
     setSearchQuery('');
     setPage(1);
+    setCheckedIds(new Set());
 
     if (!syncedFolderIds.current.has(folder.id)) {
       setLoadingMessages(true);
@@ -381,13 +430,25 @@ export default function App() {
     }
   };
 
+  // ─── Auto-advance: select next message after removing one ───
+  const advanceAfterRemove = (msgId: string) => {
+    const idx = messages.findIndex((m) => m.id === msgId);
+    if (selectedMessage?.id === msgId) {
+      const next = messages[idx + 1] || messages[idx - 1] || null;
+      if (next) {
+        selectMessage(next);
+      } else {
+        setSelectedMessage(null);
+        setFullMessage(null);
+        setThreadMessages(null);
+      }
+    }
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+  };
+
   // ─── Delete ───
   const deleteMessage = async (msg: Message) => {
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    if (selectedMessage?.id === msg.id) {
-      setSelectedMessage(null);
-      setFullMessage(null);
-    }
+    advanceAfterRemove(msg.id);
     try {
       await api.messages.delete(msg.id);
       notify('Message deleted', 'info');
@@ -399,11 +460,7 @@ export default function App() {
 
   // ─── Mark spam ───
   const markSpam = async (msg: Message) => {
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    if (selectedMessage?.id === msg.id) {
-      setSelectedMessage(null);
-      setFullMessage(null);
-    }
+    advanceAfterRemove(msg.id);
     try {
       await api.messages.markSpam(msg.id);
       notify('Marked as spam', 'info');
@@ -421,11 +478,7 @@ export default function App() {
       return;
     }
     if (msg.folder_id === archiveFolder.id) return;
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    if (selectedMessage?.id === msg.id) {
-      setSelectedMessage(null);
-      setFullMessage(null);
-    }
+    advanceAfterRemove(msg.id);
     try {
       await api.messages.move(msg.id, archiveFolder.id);
       notify('Archived', 'info');
@@ -437,11 +490,7 @@ export default function App() {
 
   // ─── Move to folder ───
   const moveMessage = async (msg: Message, folderId: string) => {
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    if (selectedMessage?.id === msg.id) {
-      setSelectedMessage(null);
-      setFullMessage(null);
-    }
+    advanceAfterRemove(msg.id);
     try {
       await api.messages.move(msg.id, folderId);
       const targetFolder = folders.find((f) => f.id === folderId);
@@ -450,6 +499,67 @@ export default function App() {
       notify('Failed to move message', 'error');
       reloadCurrentView();
     }
+  };
+
+  // ─── Bulk actions (concurrent with limit) ───
+  const runConcurrent = async <T,>(
+    items: T[],
+    fn: (item: T) => Promise<void>,
+    limit = 5,
+  ): Promise<number> => {
+    let ok = 0;
+    for (let i = 0; i < items.length; i += limit) {
+      const batch = items.slice(i, i + limit);
+      const results = await Promise.allSettled(batch.map(fn));
+      ok += results.filter((r) => r.status === 'fulfilled').length;
+    }
+    return ok;
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(checkedIds);
+    if (ids.length === 0) return;
+    setMessages((prev) => prev.filter((m) => !checkedIds.has(m.id)));
+    if (selectedMessage && checkedIds.has(selectedMessage.id)) {
+      setSelectedMessage(null);
+      setFullMessage(null);
+      setThreadMessages(null);
+    }
+    setCheckedIds(new Set());
+    const ok = await runConcurrent(ids, (id) => api.messages.delete(id).then(() => {}));
+    notify(`Deleted ${ok} message${ok !== 1 ? 's' : ''}`, 'info');
+  };
+
+  const bulkArchive = async () => {
+    const archiveFolder = folders.find((f) => f.type === 'archive');
+    if (!archiveFolder) {
+      notify('No archive folder found', 'error');
+      return;
+    }
+    const ids = Array.from(checkedIds);
+    if (ids.length === 0) return;
+    setMessages((prev) => prev.filter((m) => !checkedIds.has(m.id)));
+    if (selectedMessage && checkedIds.has(selectedMessage.id)) {
+      setSelectedMessage(null);
+      setFullMessage(null);
+      setThreadMessages(null);
+    }
+    setCheckedIds(new Set());
+    const ok = await runConcurrent(ids, (id) =>
+      api.messages.move(id, archiveFolder.id).then(() => {}),
+    );
+    notify(`Archived ${ok} message${ok !== 1 ? 's' : ''}`, 'info');
+  };
+
+  const bulkMarkRead = async (read: boolean) => {
+    const ids = Array.from(checkedIds);
+    if (ids.length === 0) return;
+    setMessages((prev) =>
+      prev.map((m) => (checkedIds.has(m.id) ? { ...m, is_read: read ? 1 : 0 } : m)),
+    );
+    setCheckedIds(new Set());
+    await runConcurrent(ids, (id) => api.messages.update(id, { is_read: read }).then(() => {}));
+    notify(`Marked ${ids.length} as ${read ? 'read' : 'unread'}`, 'info');
   };
 
   // ─── Empty trash ───
@@ -470,6 +580,27 @@ export default function App() {
       }
     } catch {
       notify('Failed to empty trash', 'error');
+    }
+  };
+
+  // ─── Empty spam ───
+  const emptySpam = async () => {
+    if (!activeAccount) return;
+    try {
+      const result = await api.messages.emptySpam(activeAccount.id);
+      setMessages([]);
+      setTotalMessages(0);
+      setSelectedMessage(null);
+      setFullMessage(null);
+      notify(`Spam emptied (${result.deleted} messages)`, 'info');
+      const flds = await api.folders.list(activeAccount.id);
+      setFolders(flds);
+      if (activeFolder) {
+        const updated = flds.find((f) => f.id === activeFolder.id);
+        if (updated) setActiveFolder(updated);
+      }
+    } catch {
+      notify('Failed to empty spam', 'error');
     }
   };
 
@@ -544,11 +675,21 @@ export default function App() {
     });
   };
 
-  const handleForward = (msg: Message) => {
+  const handleForward = async (msg: Message) => {
+    let fwdAttachments: import('./hooks/api').Attachment[] = [];
+    if (msg.has_attachments) {
+      try {
+        const data = await api.messages.getAttachments(msg.id);
+        fwdAttachments = data.attachments.filter((a) => !a.content_id);
+      } catch {
+        // continue without attachments
+      }
+    }
     setShowCompose({
       to: '',
       subject: msg.subject.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject}`,
       body: `\n\n\n---------- Forwarded message ----------\nFrom: ${msg.from_name || ''} <${msg.from_address}>\nSubject: ${msg.subject}\nDate: ${new Date(msg.date * 1000).toLocaleString()}\n\n${msg.body_text || ''}`,
+      forwardAttachments: fwdAttachments.length > 0 ? fwdAttachments : undefined,
     });
   };
 
@@ -649,6 +790,7 @@ export default function App() {
           unifiedActive={showUnified}
           onShowUnified={showUnifiedInbox}
           onEmptyTrash={emptyTrash}
+          onEmptySpam={emptySpam}
           defaultAccountId={defaultAccountId}
           onSetDefault={setDefaultAccount}
           theme={theme}
@@ -680,6 +822,13 @@ export default function App() {
           onRefresh={handleRefresh}
           refreshing={refreshing}
           showAccountBadge={showUnified}
+          checkedIds={checkedIds}
+          onCheck={handleCheck}
+          onBulkDelete={bulkDelete}
+          onBulkArchive={bulkArchive}
+          onBulkMarkRead={bulkMarkRead}
+          onSelectAll={() => setCheckedIds(new Set(messages.map((m) => m.id)))}
+          onDeselectAll={() => setCheckedIds(new Set())}
         />
 
         {/* Message View */}
@@ -714,6 +863,7 @@ export default function App() {
           initialSubject={showCompose.subject}
           initialBody={showCompose.body}
           inReplyTo={showCompose.inReplyTo}
+          forwardAttachments={showCompose.forwardAttachments}
           onClose={() => setShowCompose(null)}
           onSent={() => {
             setShowCompose(null);

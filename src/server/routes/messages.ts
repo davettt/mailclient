@@ -1,10 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import db, { AccountRow, FolderRow, MessageRow } from '../db/database';
+import db, { AccountRow, AttachmentRow, FolderRow, MessageRow } from '../db/database';
 import { imapService } from '../services/imap';
 import { smtpService } from '../services/smtp';
 
 const router = Router();
+
+const attachmentSchema = z.object({
+  filename: z.string().min(1),
+  content_base64: z.string().min(1),
+  content_type: z.string().optional(),
+});
 
 const sendSchema = z.object({
   account_id: z.string().min(1),
@@ -16,6 +22,8 @@ const sendSchema = z.object({
   html: z.string().optional(),
   in_reply_to: z.string().optional(),
   text_only: z.boolean().optional(),
+  forward_attachment_ids: z.array(z.string()).optional(),
+  attachments: z.array(attachmentSchema).optional(),
 });
 
 const updateSchema = z.object({
@@ -141,7 +149,7 @@ router.get('/unified', (req: Request, res: Response) => {
     .prepare(
       `
     WITH inbox_msgs AS (
-      SELECT m.*, f.name as folder_name, f.type as folder_type,
+      SELECT m.*, m.rowid as _rowid, f.name as folder_name, f.type as folder_type,
              a.name as account_name, a.email as account_email
       FROM messages m
       JOIN folders f ON m.folder_id = f.id
@@ -158,7 +166,7 @@ router.get('/unified', (req: Request, res: Response) => {
     ranked AS (
       SELECT im.*, ROW_NUMBER() OVER (
         PARTITION BY COALESCE(im.thread_id, im.id)
-        ORDER BY im.date DESC, im.rowid DESC
+        ORDER BY im.date DESC, im._rowid DESC
       ) as rn
       FROM inbox_msgs im
     )
@@ -232,8 +240,33 @@ router.put('/settings', (req: Request, res: Response) => {
   res.json({ saved: true });
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
-  let message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
+// Attachment endpoints (must be before /:id catch-all)
+router.get('/attachment/:attachmentId', (req: Request, res: Response) => {
+  const att = db.prepare('SELECT * FROM attachments WHERE id = ?').get(req.params.attachmentId) as
+    | AttachmentRow
+    | undefined;
+
+  if (!att || !att.content) {
+    res.status(404).json({ error: 'Attachment not found' });
+    return;
+  }
+
+  const ct = att.content_type || 'application/octet-stream';
+  const safeInlineTypes = ['image/', 'application/pdf'];
+  const isSafeForInline = safeInlineTypes.some((prefix) => ct.startsWith(prefix));
+  const inline = req.query.inline === '1' && isSafeForInline;
+  res.set('Content-Type', inline ? ct : 'application/octet-stream');
+  res.set('Content-Length', String(att.content.length));
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set(
+    'Content-Disposition',
+    inline ? 'inline' : `attachment; filename="${att.filename.replace(/"/g, '\\"')}"`,
+  );
+  res.end(att.content);
+});
+
+router.get('/:id/attachments', async (req: Request, res: Response) => {
+  const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
     | MessageRow
     | undefined;
 
@@ -251,9 +284,72 @@ router.get('/:id', async (req: Request, res: Response) => {
         .prepare('SELECT * FROM folders WHERE id = ?')
         .get(message.folder_id) as FolderRow;
       await imapService.fetchMessageBody(account, folder, message.uid, message.id);
+    } catch (err) {
+      console.error('Failed to fetch message body for attachments:', err);
+    }
+  }
+
+  const attachments = db
+    .prepare(
+      'SELECT id, filename, content_type, size, content_id FROM attachments WHERE message_id = ?',
+    )
+    .all(message.id);
+
+  res.json({ attachments });
+});
+
+router.get('/:id/cid/:cid', (req: Request, res: Response) => {
+  const att = db
+    .prepare(
+      'SELECT content, content_type FROM attachments WHERE message_id = ? AND content_id = ?',
+    )
+    .get(req.params.id, req.params.cid) as { content: Buffer; content_type: string } | undefined;
+
+  if (!att || !att.content) {
+    res.status(404).end();
+    return;
+  }
+
+  const ct = att.content_type || 'application/octet-stream';
+  if (!ct.startsWith('image/')) {
+    res.status(403).json({ error: 'CID endpoint only serves images' });
+    return;
+  }
+
+  res.set('Content-Type', ct);
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.end(att.content);
+});
+
+const MESSAGE_COLS = `id, account_id, folder_id, uid, message_id, in_reply_to, "references",
+  from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
+  subject, date, body_text, body_html, snippet,
+  is_read, is_starred, is_draft, has_attachments, flags, size, created_at, thread_id`;
+
+router.get('/:id', async (req: Request, res: Response) => {
+  let message = db
+    .prepare(`SELECT ${MESSAGE_COLS} FROM messages WHERE id = ?`)
+    .get(req.params.id) as MessageRow | undefined;
+
+  if (!message) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+
+  if (message.snippet === null && message.uid) {
+    try {
+      const account = db
+        .prepare('SELECT * FROM accounts WHERE id = ?')
+        .get(message.account_id) as AccountRow;
+      const folder = db
+        .prepare('SELECT * FROM folders WHERE id = ?')
+        .get(message.folder_id) as FolderRow;
+      await imapService.fetchMessageBody(account, folder, message.uid, message.id);
       message =
-        (db.prepare('SELECT * FROM messages WHERE id = ?').get(message.id) as MessageRow) ||
-        message;
+        (db
+          .prepare(`SELECT ${MESSAGE_COLS} FROM messages WHERE id = ?`)
+          .get(message.id) as MessageRow) || message;
     } catch (err) {
       console.error('Failed to fetch message body:', err);
     }
@@ -426,24 +522,24 @@ router.post('/:id/spam', async (req: Request, res: Response) => {
       .prepare('SELECT * FROM accounts WHERE id = ?')
       .get(message.account_id) as AccountRow;
 
-    if (message.uid) {
-      const folder = db
-        .prepare('SELECT * FROM folders WHERE id = ?')
-        .get(message.folder_id) as FolderRow;
-      const spamFolder = db
-        .prepare(
-          `SELECT * FROM folders WHERE account_id = ? AND type = 'spam'
-           ORDER BY CASE WHEN flags LIKE '%\\Junk%' OR flags LIKE '%\\Spam%' THEN 0 ELSE 1 END
-           LIMIT 1`,
-        )
-        .get(account.id) as FolderRow | undefined;
-
-      if (spamFolder) {
-        await imapService.moveMessage(account, folder, message.uid, spamFolder.path);
-      }
-    }
+    const folder = db
+      .prepare('SELECT * FROM folders WHERE id = ?')
+      .get(message.folder_id) as FolderRow;
+    const spamFolder = db
+      .prepare(
+        `SELECT * FROM folders WHERE account_id = ? AND type = 'spam'
+         ORDER BY CASE WHEN flags LIKE '%\\Junk%' OR flags LIKE '%\\Spam%' THEN 0 ELSE 1 END
+         LIMIT 1`,
+      )
+      .get(account.id) as FolderRow | undefined;
 
     db.prepare('DELETE FROM messages WHERE id = ?').run(message.id);
+
+    if (message.uid && spamFolder) {
+      imapService.moveMessage(account, folder, message.uid, spamFolder.path).catch((err) => {
+        console.error('IMAP move to spam failed:', err.message);
+      });
+    }
 
     const counts = db
       .prepare(
@@ -495,6 +591,11 @@ router.post('/:id/move', async (req: Request, res: Response) => {
       return;
     }
 
+    db.prepare('UPDATE messages SET folder_id = ?, uid = NULL WHERE id = ?').run(
+      targetFolder.id,
+      message.id,
+    );
+
     if (message.uid) {
       const account = db
         .prepare('SELECT * FROM accounts WHERE id = ?')
@@ -502,13 +603,10 @@ router.post('/:id/move', async (req: Request, res: Response) => {
       const fromFolder = db
         .prepare('SELECT * FROM folders WHERE id = ?')
         .get(message.folder_id) as FolderRow;
-      await imapService.moveMessage(account, fromFolder, message.uid, targetFolder.path);
+      imapService.moveMessage(account, fromFolder, message.uid, targetFolder.path).catch((err) => {
+        console.error('IMAP move failed (local move succeeded):', err.message);
+      });
     }
-
-    db.prepare('UPDATE messages SET folder_id = ?, uid = NULL WHERE id = ?').run(
-      targetFolder.id,
-      message.id,
-    );
 
     res.json({ moved: true });
   } catch (err: any) {
@@ -535,24 +633,32 @@ router.delete('/:id', async (req: Request, res: Response) => {
       .prepare('SELECT * FROM folders WHERE id = ?')
       .get(message.folder_id) as FolderRow;
     const trashFolder = db
-      .prepare("SELECT * FROM folders WHERE account_id = ? AND type = 'trash'")
+      .prepare(
+        `SELECT * FROM folders WHERE account_id = ? AND type = 'trash'
+         ORDER BY CASE WHEN flags LIKE '%\\\\Trash%' THEN 0 ELSE 1 END
+         LIMIT 1`,
+      )
       .get(account.id) as FolderRow | undefined;
 
     const alreadyInTrash = folder.type === 'trash';
 
     if (trashFolder && !alreadyInTrash) {
-      if (message.uid) {
-        await imapService.moveMessage(account, folder, message.uid, trashFolder.path);
-      }
       db.prepare('UPDATE messages SET folder_id = ?, uid = NULL WHERE id = ?').run(
         trashFolder.id,
         message.id,
       );
-    } else {
       if (message.uid) {
-        await imapService.deleteMessage(account, folder, message.uid);
+        imapService.moveMessage(account, folder, message.uid, trashFolder.path).catch((err) => {
+          console.error('IMAP move to trash failed (local move succeeded):', err.message);
+        });
       }
+    } else {
       db.prepare('DELETE FROM messages WHERE id = ?').run(message.id);
+      if (message.uid) {
+        imapService.deleteMessage(account, folder, message.uid).catch((err) => {
+          console.error('IMAP permanent delete failed (local delete succeeded):', err.message);
+        });
+      }
     }
 
     for (const fid of [message.folder_id, trashFolder?.id].filter(Boolean)) {
@@ -626,6 +732,59 @@ router.delete('/trash/:accountId', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Failed to empty trash:', err);
     res.status(500).json({ error: 'Failed to empty trash' });
+  }
+});
+
+// Empty spam for an account
+router.delete('/spam/:accountId', async (req: Request, res: Response) => {
+  try {
+    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(req.params.accountId) as
+      | AccountRow
+      | undefined;
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+
+    const spamFolders = db
+      .prepare("SELECT * FROM folders WHERE account_id = ? AND type = 'spam'")
+      .all(account.id) as FolderRow[];
+
+    if (spamFolders.length === 0) {
+      res.json({ deleted: 0 });
+      return;
+    }
+
+    let totalDeleted = 0;
+
+    for (const spamFolder of spamFolders) {
+      const spamMessages = db
+        .prepare('SELECT uid FROM messages WHERE folder_id = ? AND uid IS NOT NULL')
+        .all(spamFolder.id) as { uid: number }[];
+
+      for (const msg of spamMessages) {
+        try {
+          await imapService.deleteMessage(account, spamFolder, msg.uid);
+        } catch {
+          // continue with remaining messages
+        }
+      }
+
+      const deleted = db
+        .prepare('SELECT COUNT(*) as count FROM messages WHERE folder_id = ?')
+        .get(spamFolder.id) as { count: number };
+      totalDeleted += deleted.count;
+
+      db.prepare('DELETE FROM messages WHERE folder_id = ?').run(spamFolder.id);
+      db.prepare('UPDATE folders SET total_messages = 0, unread_messages = 0 WHERE id = ?').run(
+        spamFolder.id,
+      );
+    }
+
+    res.json({ deleted: totalDeleted });
+  } catch (err: any) {
+    console.error('Failed to empty spam:', err);
+    res.status(500).json({ error: 'Failed to empty spam' });
   }
 });
 
@@ -703,6 +862,31 @@ router.post('/send', async (req: Request, res: Response) => {
       return;
     }
 
+    const attachments: { filename: string; content: Buffer; contentType?: string }[] = [];
+    if (data.forward_attachment_ids && data.forward_attachment_ids.length > 0) {
+      for (const attId of data.forward_attachment_ids) {
+        const att = db.prepare('SELECT * FROM attachments WHERE id = ?').get(attId) as
+          | AttachmentRow
+          | undefined;
+        if (att?.content) {
+          attachments.push({
+            filename: att.filename,
+            content: att.content,
+            contentType: att.content_type || undefined,
+          });
+        }
+      }
+    }
+    if (data.attachments && data.attachments.length > 0) {
+      for (const att of data.attachments) {
+        attachments.push({
+          filename: att.filename,
+          content: Buffer.from(att.content_base64, 'base64'),
+          contentType: att.content_type || undefined,
+        });
+      }
+    }
+
     const rawMessage = await smtpService.send(account, {
       to: data.to,
       cc: data.cc,
@@ -711,6 +895,7 @@ router.post('/send', async (req: Request, res: Response) => {
       text: data.body,
       html: data.text_only ? undefined : data.html,
       inReplyTo: data.in_reply_to,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
     // Save to Sent folder via IMAP APPEND, then sync

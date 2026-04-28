@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Account, api } from '../hooks/api';
+import { Account, Attachment, api } from '../hooks/api';
+import { formatFileSize } from '../hooks/utils';
 
 interface ComposeProps {
   account: Account;
@@ -12,6 +13,7 @@ interface ComposeProps {
   initialSubject?: string;
   initialBody?: string;
   inReplyTo?: string;
+  forwardAttachments?: Attachment[];
   onClose: () => void;
   onSent: () => void;
 }
@@ -22,6 +24,7 @@ export default function Compose({
   initialSubject = '',
   initialBody = '',
   inReplyTo,
+  forwardAttachments,
   onClose,
   onSent,
 }: ComposeProps) {
@@ -35,6 +38,9 @@ export default function Compose({
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [richText, setRichText] = useState(!inReplyTo);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [fwdAttachments, setFwdAttachments] = useState<Attachment[]>(forwardAttachments || []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -52,6 +58,17 @@ export default function Compose({
     },
   });
 
+  const readFileAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const handleSend = async () => {
     if (!to.trim()) {
       setError('Recipient is required');
@@ -62,6 +79,21 @@ export default function Compose({
     try {
       const textBody = richText ? (editor?.getText() || '').replace(/\n{3,}/g, '\n\n') : body;
       const htmlBody = richText ? editor?.getHTML() || '' : undefined;
+      const fwdIds = fwdAttachments.map((a) => a.id);
+
+      let newAttachments:
+        | { filename: string; content_base64: string; content_type: string }[]
+        | undefined;
+      if (attachedFiles.length > 0) {
+        newAttachments = await Promise.all(
+          attachedFiles.map(async (file) => ({
+            filename: file.name,
+            content_base64: await readFileAsBase64(file),
+            content_type: file.type || 'application/octet-stream',
+          })),
+        );
+      }
+
       await api.messages.send({
         account_id: account.id,
         to: to.trim(),
@@ -72,6 +104,8 @@ export default function Compose({
         html: htmlBody,
         in_reply_to: inReplyTo,
         text_only: !richText,
+        forward_attachment_ids: fwdIds.length > 0 ? fwdIds : undefined,
+        attachments: newAttachments,
       });
       onSent();
     } catch (err: unknown) {
@@ -80,6 +114,9 @@ export default function Compose({
     setSending(false);
   };
 
+  const escapeHtml = (text: string) =>
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
   const toggleRichText = useCallback(() => {
     if (richText && editor) {
       setBody(editor.getText().replace(/\n{2,}/g, '\n'));
@@ -87,7 +124,7 @@ export default function Compose({
       editor.commands.setContent(
         body
           .split('\n')
-          .map((line) => (line ? `<p>${line}</p>` : '<p></p>'))
+          .map((line) => (line ? `<p>${escapeHtml(line)}</p>` : '<p></p>'))
           .join(''),
       );
     }
@@ -394,6 +431,46 @@ export default function Compose({
             </>
           )}
           <div style={{ flex: 1 }} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files) {
+                setAttachedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+              }
+              e.target.value = '';
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach files"
+            style={{
+              padding: '3px 6px',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-tertiary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              marginRight: 4,
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
           <button
             onClick={toggleRichText}
             style={{
@@ -411,6 +488,93 @@ export default function Compose({
             {richText ? 'Rich text' : 'Plain text'}
           </button>
         </div>
+
+        {/* Attachment chips */}
+        {(attachedFiles.length > 0 || fwdAttachments.length > 0) && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              padding: '8px 20px',
+              borderBottom: '1px solid var(--border-subtle)',
+              flexShrink: 0,
+            }}
+          >
+            {fwdAttachments.map((att) => (
+              <span
+                key={att.id}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {att.filename}
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
+                  {formatFileSize(att.size)}
+                </span>
+                <button
+                  onClick={() => setFwdAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-tertiary)',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    padding: 0,
+                    marginLeft: 2,
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {attachedFiles.map((file, i) => (
+              <span
+                key={`file-${i}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {file.name}
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
+                  {formatFileSize(file.size)}
+                </span>
+                <button
+                  onClick={() => setAttachedFiles((prev) => prev.filter((_, j) => j !== i))}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-tertiary)',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    padding: 0,
+                    marginLeft: 2,
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Body */}
         {richText ? (

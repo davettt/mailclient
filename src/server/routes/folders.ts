@@ -59,9 +59,13 @@ router.post('/:folderId/sync', async (req: Request, res: Response) => {
       return;
     }
 
-    const account = db
-      .prepare('SELECT * FROM accounts WHERE id = ?')
-      .get(folder.account_id) as AccountRow;
+    const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(folder.account_id) as
+      | AccountRow
+      | undefined;
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
 
     const synced = await imapService.syncMessages(account, folder, { limit: 100 });
 

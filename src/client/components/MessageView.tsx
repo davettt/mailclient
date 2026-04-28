@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { api, Folder, Message } from '../hooks/api';
-import { formatDate, extractName, getInitial, avatarColor, parseAddresses } from '../hooks/utils';
+import { api, Attachment, Folder, Message } from '../hooks/api';
+import {
+  formatDate,
+  formatFileSize,
+  extractName,
+  getInitial,
+  avatarColor,
+  parseAddresses,
+} from '../hooks/utils';
 import type { Theme } from '../App';
 
 interface MessageViewProps {
@@ -49,13 +56,24 @@ export default function MessageView({
   } | null>(null);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
     setViewMode('text');
     setHeadersData(null);
     setShowMoveMenu(false);
     setShowMoreMenu(false);
+    setAttachments([]);
   }, [message?.id]);
+
+  useEffect(() => {
+    if (message?.has_attachments) {
+      api.messages
+        .getAttachments(message.id)
+        .then((data) => setAttachments(data.attachments))
+        .catch(() => setAttachments([]));
+    }
+  }, [message?.id, message?.has_attachments]);
 
   const [sanitizedHtml, setSanitizedHtml] = useState('');
 
@@ -67,44 +85,51 @@ export default function MessageView({
         ALLOW_DATA_ATTR: false,
       });
       const isDark = theme === 'dark';
-      const styled = `<html><head><style>
+      const withCid = message.id
+        ? clean.replace(
+            /src=["']cid:([^"']+)["']/gi,
+            (_match, cid) => `src="${api.messages.cidUrl(message.id, cid)}"`,
+          )
+        : clean;
+      const heightScript = `<script>
+        function reportHeight(){parent.postMessage({type:'iframe-height',height:document.body.scrollHeight},'*')}
+        window.addEventListener('load',function(){reportHeight();setTimeout(reportHeight,300);setTimeout(reportHeight,1000)});
+        new MutationObserver(reportHeight).observe(document.body,{childList:true,subtree:true});
+      </script>`;
+      const styled = `<html><head><base target="_blank"><style>
+        html, body { overflow: hidden; }
         body { font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.6;
                color: ${isDark ? '#E8E4DF' : '#1a1a1a'}; background: ${isDark ? '#0C0C0C' : '#f8f7f5'}; padding: 16px; margin: 0; }
         a { color: ${isDark ? '#D4944A' : '#c0823a'}; }
         img { max-width: 100%; height: auto; }
         blockquote { border-left: 3px solid ${isDark ? '#333' : '#d8d4cf'}; padding-left: 12px; margin-left: 0; color: ${isDark ? '#888' : '#6b6560'}; }
         pre, code { background: ${isDark ? '#1C1C1C' : '#f0eeeb'}; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-      </style></head><body>${clean}</body></html>`;
+      </style></head><body>${withCid}${heightScript}</body></html>`;
       setSanitizedHtml(styled);
     } else {
       setSanitizedHtml('');
     }
-  }, [message?.body_html, theme]);
+  }, [message?.body_html, message?.id, theme]);
 
   useEffect(() => {
-    if (viewMode === 'html' && sanitizedHtml && iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(sanitizedHtml);
-        doc.close();
-        const resizeIframe = () => {
-          if (iframeRef.current && doc.body) {
-            iframeRef.current.style.height = doc.body.scrollHeight + 'px';
-          }
-        };
-        setTimeout(resizeIframe, 100);
-        setTimeout(resizeIframe, 500);
-        doc.addEventListener('click', (e: MouseEvent) => {
-          const anchor = (e.target as HTMLElement).closest('a');
-          if (anchor?.href) {
-            e.preventDefault();
-            window.open(anchor.href, '_blank', 'noopener');
-          }
-        });
+    if (viewMode === 'html' && iframeRef.current) {
+      if (!sanitizedHtml) {
+        iframeRef.current.srcdoc = '';
+        return;
       }
+      iframeRef.current.srcdoc = sanitizedHtml;
     }
   }, [sanitizedHtml, viewMode]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'iframe-height' && iframeRef.current) {
+        iframeRef.current.style.height = e.data.height + 'px';
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   const loadHeaders = async () => {
     if (!message) return;
@@ -561,6 +586,7 @@ export default function MessageView({
                     {/* Body */}
                     {isActive ? (
                       <>
+                        <AttachmentList attachments={attachments} />
                         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
                           <ViewToggle
                             label="Text"
@@ -655,6 +681,8 @@ export default function MessageView({
               </div>
             </div>
 
+            <AttachmentList attachments={attachments} />
+
             {/* View mode toggle */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
               <ViewToggle
@@ -739,7 +767,7 @@ function MessageBody({
     return (
       <iframe
         ref={iframeRef}
-        sandbox="allow-same-origin"
+        sandbox="allow-scripts allow-popups allow-popups-to-navigate"
         style={{
           width: '100%',
           border: 'none',
@@ -905,3 +933,92 @@ const menuItemDisabledStyle: React.CSSProperties = {
   color: 'var(--text-tertiary)',
   cursor: 'default',
 };
+
+function AttachmentList({ attachments }: { attachments: Attachment[] }) {
+  if (attachments.length === 0) return null;
+  const isInlineImage = (a: Attachment) => a.content_id && a.content_type?.startsWith('image/');
+  const regularAtts = attachments.filter((a) => !isInlineImage(a));
+  if (regularAtts.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 16,
+        padding: '12px 0',
+        borderBottom: '1px solid var(--border-subtle)',
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11,
+          color: 'var(--text-tertiary)',
+          fontFamily: 'var(--font-mono)',
+          width: '100%',
+          marginBottom: 4,
+        }}
+      >
+        {regularAtts.length} attachment{regularAtts.length !== 1 ? 's' : ''}
+      </span>
+      {regularAtts.map((att) => (
+        <a
+          key={att.id}
+          href={api.messages.attachmentUrl(att.id)}
+          download={att.filename}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--text-primary)',
+            fontSize: 12,
+            textDecoration: 'none',
+            cursor: 'pointer',
+            transition: 'border-color 0.15s',
+            maxWidth: 260,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-border)')}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--text-tertiary)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ flexShrink: 0 }}
+          >
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+          </svg>
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {att.filename}
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-mono)',
+              flexShrink: 0,
+            }}
+          >
+            {formatFileSize(att.size)}
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}

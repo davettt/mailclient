@@ -67,7 +67,8 @@ router.post('/imap', async (req: Request, res: Response) => {
       res.json({ id, status: 'connected' });
     } catch (connErr: any) {
       db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
-      res.status(400).json({ error: `Connection failed: ${connErr.message}` });
+      console.error('IMAP connection failed:', connErr.message);
+      res.status(400).json({ error: 'Connection failed. Check host, port, and credentials.' });
     }
   } catch (err: any) {
     console.error('Failed to add account:', err);

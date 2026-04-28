@@ -18,6 +18,7 @@ interface SidebarProps {
   unifiedActive: boolean;
   onShowUnified: () => void;
   onEmptyTrash: () => void;
+  onEmptySpam: () => void;
   defaultAccountId: string | null;
   onSetDefault: (a: Account) => void;
   theme: Theme;
@@ -40,6 +41,7 @@ export default function Sidebar({
   unifiedActive,
   onShowUnified,
   onEmptyTrash,
+  onEmptySpam,
   defaultAccountId,
   onSetDefault,
   theme,
@@ -48,6 +50,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const sorted = sortFolders(folders);
   const isTrashActive = activeFolder?.type === 'trash';
+  const isSpamActive = activeFolder?.type === 'spam';
   const sortedAccounts = [...accounts].sort((a, b) => {
     if (a.id === defaultAccountId) return -1;
     if (b.id === defaultAccountId) return 1;
@@ -229,6 +232,32 @@ export default function Sidebar({
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             Empty Trash
+          </button>
+        )}
+
+        {/* Empty Spam button */}
+        {isSpamActive && activeFolder && activeFolder.total_messages > 0 && (
+          <button
+            onClick={onEmptySpam}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '8px 10px',
+              marginTop: 4,
+              background: 'transparent',
+              border: '1px solid rgba(217,91,78,0.2)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--red)',
+              fontSize: 12,
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(217,91,78,0.08)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            Empty Spam
           </button>
         )}
       </nav>

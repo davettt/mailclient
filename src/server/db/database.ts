@@ -110,6 +110,8 @@ db.exec(`
     content BLOB
   );
 
+  CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
+
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -275,4 +277,14 @@ export interface MessageRow {
   size: number;
   created_at: number;
   thread_id: string | null;
+}
+
+export interface AttachmentRow {
+  id: string;
+  message_id: string;
+  filename: string;
+  content_type: string | null;
+  size: number;
+  content_id: string | null;
+  content: Buffer | null;
 }

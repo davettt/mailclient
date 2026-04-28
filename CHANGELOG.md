@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.4.0] - 2026-04-28
+
+### Added
+
+- Multi-select with checkboxes — click avatar to select, shift-click for range selection
+- Bulk actions bar: archive, delete, mark read/unread for selected messages
+- Select All / Deselect All checkbox in message list header
+- Auto-advance to next message after delete
+- Full attachment support: view, download, and inline images in email reader
+- Compose with file attachments (uploaded as base64)
+- Forward emails with attachments preserved
+- Empty Spam button in sidebar (matches Empty Trash pattern)
+- Keyboard shortcuts: Escape to clear selection
+
+### Fixed
+
+- Bulk delete now shows messages in trash (DB-first pattern, IMAP fire-and-forget)
+- Trash folder selection prefers IMAP `\Trash` flag over name heuristics
+- Unified inbox CTE preserves rowid for correct ordering
+- PDFs with content_id no longer hidden as inline images
+- Checkbox only appears on avatar hover, not entire row
+
+### Security
+
+- HTML email iframe uses `sandbox="allow-scripts allow-popups"` without `allow-same-origin` (XSS protection)
+- Iframe renders via `srcdoc` with postMessage height reporting
+- CID endpoint restricted to `image/*` content types only
+- Attachment downloads force `Content-Disposition: attachment` for unsafe content types
+- `X-Content-Type-Options: nosniff` on all attachment responses
+- CORS dev port (`5173`) only allowed in non-production mode
+- Encryption key validated at server startup with clear error on failure
+- IMAP connection errors no longer leak server details to client
+- Compose rich text toggle escapes HTML entities before injection
+- SMTP `from` header uses nodemailer object format (prevents header injection)
+
+### Performance
+
+- Bulk operations run 5 concurrent requests instead of sequential
+- IMAP flag sync bounded to local UID range instead of `1:*`
+- UID reconciliation bounded to local range, skipped for 5000+ message folders
+- Message view query excludes `raw_source`/`raw_headers` columns
+- IMAP connection pool auto-disconnects after 5 minutes idle
+
+### Changed
+
+- Folder sync null-checks account existence before proceeding
+- Search timeout cleared on component unmount
+
 ## [0.3.0] - 2026-04-27
 
 ### Added

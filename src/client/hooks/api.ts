@@ -66,6 +66,14 @@ export interface Message {
   account_email?: string;
 }
 
+export interface Attachment {
+  id: string;
+  filename: string;
+  content_type: string | null;
+  size: number;
+  content_id: string | null;
+}
+
 export interface MessageList {
   messages: Message[];
   total: number;
@@ -132,6 +140,13 @@ export const api = {
       }),
     emptyTrash: (accountId: string) =>
       request<{ deleted: number }>(`/messages/trash/${accountId}`, { method: 'DELETE' }),
+    emptySpam: (accountId: string) =>
+      request<{ deleted: number }>(`/messages/spam/${accountId}`, { method: 'DELETE' }),
+    getAttachments: (messageId: string) =>
+      request<{ attachments: Attachment[] }>(`/messages/${messageId}/attachments`),
+    attachmentUrl: (attachmentId: string) => `${BASE}/messages/attachment/${attachmentId}`,
+    cidUrl: (messageId: string, cid: string) =>
+      `${BASE}/messages/${messageId}/cid/${encodeURIComponent(cid)}`,
     getThread: (threadId: string) =>
       request<{ messages: Message[] }>(`/messages/thread/${threadId}`),
     search: (accountId: string, query: string) =>
@@ -148,6 +163,8 @@ export const api = {
       html?: string;
       in_reply_to?: string;
       text_only?: boolean;
+      forward_attachment_ids?: string[];
+      attachments?: { filename: string; content_base64: string; content_type: string }[];
     }) =>
       request<{ sent: boolean }>('/messages/send', {
         method: 'POST',
