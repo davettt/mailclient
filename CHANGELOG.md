@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.1] - 2026-05-03
+
+### Changed
+
+- Database location moved from `local_data/` to `~/.mailclient-data/` to prevent cloud sync (Tresorit) corruption of SQLite WAL files
+- `DATA_DIR` in `.env` now uses absolute path outside the project directory
+
+### Fixed
+
+- Recovered from SQLite database corruption caused by cloud sync interference with WAL/SHM files
+- Rebuilt FTS5 search index after recovery
+
 ## [0.4.0] - 2026-04-28
 
 ### Added

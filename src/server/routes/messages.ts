@@ -3,8 +3,21 @@ import { z } from 'zod';
 import db, { AccountRow, AttachmentRow, FolderRow, MessageRow } from '../db/database';
 import { imapService } from '../services/imap';
 import { smtpService } from '../services/smtp';
+import { scoreSpam, SIGNAL_LABELS } from '../utils/spamCheck';
 
 const router = Router();
+
+function getSpamWhitelist(): string[] {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'spamWhitelist'").get() as
+    | { value: string }
+    | undefined;
+  if (!row) return [];
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return [];
+  }
+}
 
 const attachmentSchema = z.object({
   filename: z.string().min(1),
@@ -62,6 +75,7 @@ router.get('/folder/:folderId', (req: Request, res: Response) => {
     SELECT r.id, r.account_id, r.folder_id, r.from_address, r.from_name,
            r.to_addresses, r.subject, r.date, r.snippet,
            r.is_read, r.is_starred, r.is_draft, r.has_attachments,
+           r.spam_score,
            COALESCE(r.thread_id, r.id) as thread_id,
            ts.thread_count, ts.thread_unread
     FROM ranked r
@@ -109,6 +123,7 @@ router.get('/account/:accountId', (req: Request, res: Response) => {
     SELECT m.id, m.account_id, m.folder_id, m.from_address, m.from_name,
            m.to_addresses, m.subject, m.date, m.snippet,
            m.is_read, m.is_starred, m.is_draft, m.has_attachments,
+           m.spam_score,
            f.name as folder_name, f.type as folder_type
     FROM messages m
     JOIN folders f ON m.folder_id = f.id
@@ -173,6 +188,7 @@ router.get('/unified', (req: Request, res: Response) => {
     SELECT r.id, r.account_id, r.folder_id, r.from_address, r.from_name,
            r.to_addresses, r.subject, r.date, r.snippet,
            r.is_read, r.is_starred, r.is_draft, r.has_attachments,
+           r.spam_score,
            r.folder_name, r.folder_type, r.account_name, r.account_email,
            COALESCE(r.thread_id, r.id) as thread_id,
            ts.thread_count, ts.thread_unread
@@ -218,7 +234,7 @@ router.get('/settings', (_req: Request, res: Response) => {
   res.json(settings);
 });
 
-const settingsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
+const settingsSchema = z.record(z.string(), z.any());
 
 router.put('/settings', (req: Request, res: Response) => {
   const parsed = settingsSchema.safeParse(req.body);
@@ -238,6 +254,16 @@ router.put('/settings', (req: Request, res: Response) => {
 
   saveAll(Object.entries(parsed.data));
   res.json({ saved: true });
+});
+
+// Spam whitelist management (must be before /:id catch-all)
+router.delete('/spam-whitelist/:domain', (req: Request, res: Response) => {
+  const domain = req.params.domain;
+  const whitelist = getSpamWhitelist().filter((d) => d !== domain);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('spamWhitelist', ?)").run(
+    JSON.stringify(whitelist),
+  );
+  res.json({ removed: true, whitelist });
 });
 
 // Attachment endpoints (must be before /:id catch-all)
@@ -325,7 +351,8 @@ router.get('/:id/cid/:cid', (req: Request, res: Response) => {
 const MESSAGE_COLS = `id, account_id, folder_id, uid, message_id, in_reply_to, "references",
   from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
   subject, date, body_text, body_html, snippet,
-  is_read, is_starred, is_draft, has_attachments, flags, size, created_at, thread_id`;
+  is_read, is_starred, is_draft, has_attachments, flags, size, created_at, thread_id,
+  spam_score, spam_signals`;
 
 router.get('/:id', async (req: Request, res: Response) => {
   let message = db
@@ -352,6 +379,20 @@ router.get('/:id', async (req: Request, res: Response) => {
           .get(message.id) as MessageRow) || message;
     } catch (err) {
       console.error('Failed to fetch message body:', err);
+    }
+  }
+
+  if (message.body_text) {
+    const whitelist = getSpamWhitelist();
+    const result = scoreSpam(message, whitelist);
+    if (result.score !== message.spam_score) {
+      db.prepare('UPDATE messages SET spam_score = ?, spam_signals = ? WHERE id = ?').run(
+        result.score,
+        JSON.stringify(result.signals),
+        message.id,
+      );
+      message.spam_score = result.score;
+      message.spam_signals = JSON.stringify(result.signals);
     }
   }
 
@@ -382,7 +423,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     .prepare('SELECT COUNT(*) as thread_count FROM messages WHERE thread_id = ?')
     .get(message.thread_id || message.id) as { thread_count: number };
 
-  res.json({ ...message, thread_count: threadInfo.thread_count });
+  const spamSignals = JSON.parse(message.spam_signals || '[]') as string[];
+  res.json({
+    ...message,
+    thread_count: threadInfo.thread_count,
+    spam_signals: spamSignals,
+    spam_labels: spamSignals.map((s) => SIGNAL_LABELS[s]).filter(Boolean),
+  });
 });
 
 // Get all messages in a thread
@@ -557,6 +604,107 @@ router.post('/:id/spam', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Failed to mark as spam:', err);
     res.status(500).json({ error: 'Failed to mark as spam' });
+  }
+});
+
+// Archive message — finds correct archive folder for the message's account
+router.post('/:id/archive', async (req: Request, res: Response) => {
+  try {
+    const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
+      | MessageRow
+      | undefined;
+
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+
+    const archiveFolder = db
+      .prepare(
+        `SELECT * FROM folders WHERE account_id = ? AND type = 'archive'
+         ORDER BY CASE WHEN flags LIKE '%\\Archive%' THEN 0 ELSE 1 END
+         LIMIT 1`,
+      )
+      .get(message.account_id) as FolderRow | undefined;
+
+    if (!archiveFolder) {
+      res.status(404).json({ error: 'No archive folder found for this account' });
+      return;
+    }
+
+    if (message.folder_id === archiveFolder.id) {
+      res.json({ moved: true });
+      return;
+    }
+
+    const fromFolder = db
+      .prepare('SELECT * FROM folders WHERE id = ?')
+      .get(message.folder_id) as FolderRow;
+
+    db.prepare('UPDATE messages SET folder_id = ?, uid = NULL WHERE id = ?').run(
+      archiveFolder.id,
+      message.id,
+    );
+
+    if (message.uid) {
+      const account = db
+        .prepare('SELECT * FROM accounts WHERE id = ?')
+        .get(message.account_id) as AccountRow;
+      imapService.moveMessage(account, fromFolder, message.uid, archiveFolder.path).catch((err) => {
+        console.error('IMAP archive failed (local move succeeded):', err.message);
+      });
+    }
+
+    for (const fid of [message.folder_id, archiveFolder.id]) {
+      const counts = db
+        .prepare(
+          `SELECT COUNT(*) as total, SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END) as unread
+          FROM messages WHERE folder_id = ?`,
+        )
+        .get(fid) as { total: number; unread: number };
+      db.prepare('UPDATE folders SET total_messages = ?, unread_messages = ? WHERE id = ?').run(
+        counts.total,
+        counts.unread || 0,
+        fid,
+      );
+    }
+
+    res.json({ moved: true });
+  } catch (err: any) {
+    console.error('Failed to archive:', err);
+    res.status(500).json({ error: 'Failed to archive message' });
+  }
+});
+
+// Mark as not spam — whitelist sender domain
+router.post('/:id/not-spam', (req: Request, res: Response) => {
+  try {
+    const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
+      | MessageRow
+      | undefined;
+
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+
+    const domain = message.from_address.split('@')[1] || '';
+    const whitelist = getSpamWhitelist();
+    if (!whitelist.includes(domain)) {
+      whitelist.push(domain);
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('spamWhitelist', ?)").run(
+        JSON.stringify(whitelist),
+      );
+    }
+
+    db.prepare(
+      "UPDATE messages SET spam_score = 0, spam_signals = '[]' WHERE from_address LIKE ?",
+    ).run(`%@${domain}`);
+
+    res.json({ domain, whitelisted: true });
+  } catch (err: any) {
+    console.error('Failed to mark as not spam:', err);
+    res.status(500).json({ error: 'Failed to mark as not spam' });
   }
 });
 
@@ -829,6 +977,7 @@ router.get('/search/:accountId', (req: Request, res: Response) => {
     SELECT r.id, r.account_id, r.folder_id, r.from_address, r.from_name,
            r.to_addresses, r.subject, r.date, r.snippet,
            r.is_read, r.is_starred, r.has_attachments,
+           r.spam_score,
            r.folder_name,
            COALESCE(r.thread_id, r.id) as thread_id,
            ts.thread_count, ts.thread_unread

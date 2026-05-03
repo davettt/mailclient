@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Account, Attachment, api } from '../hooks/api';
+import { Account, Attachment, Signature, api } from '../hooks/api';
 import { formatFileSize } from '../hooks/utils';
 
 interface ComposeProps {
@@ -14,6 +14,7 @@ interface ComposeProps {
   initialBody?: string;
   inReplyTo?: string;
   forwardAttachments?: Attachment[];
+  signature?: Signature;
   onClose: () => void;
   onSent: () => void;
 }
@@ -25,6 +26,7 @@ export default function Compose({
   initialBody = '',
   inReplyTo,
   forwardAttachments,
+  signature,
   onClose,
   onSent,
 }: ComposeProps) {
@@ -32,7 +34,17 @@ export default function Compose({
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState(initialSubject);
-  const [body, setBody] = useState(initialBody);
+  const [body, setBody] = useState(() => {
+    if (!signature) return initialBody;
+    const sigText = `\n\n${signature.text}`;
+    if (inReplyTo) {
+      const quoteIdx = initialBody.indexOf('\n---');
+      if (quoteIdx !== -1) {
+        return initialBody.slice(0, quoteIdx) + sigText + initialBody.slice(quoteIdx);
+      }
+    }
+    return initialBody + sigText;
+  });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCcBcc, setShowCcBcc] = useState(false);
@@ -57,6 +69,16 @@ export default function Compose({
       },
     },
   });
+
+  const sigInitialized = useRef(false);
+  React.useEffect(() => {
+    if (editor && signature?.html && !sigInitialized.current) {
+      sigInitialized.current = true;
+      const sigHtml = `<p></p><div style="margin-top: 16px;">${signature.html}</div>`;
+      editor.commands.setContent(sigHtml);
+      editor.commands.focus('start');
+    }
+  }, [editor, signature]);
 
   const readFileAsBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {

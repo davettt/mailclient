@@ -23,6 +23,7 @@ interface MessageViewProps {
   onArchive: (m: Message) => void;
   onToggleStar: (m: Message) => void;
   onSpam: (m: Message) => void;
+  onNotSpam: (m: Message) => void;
   onMove: (m: Message, folderId: string) => void;
   onBack: () => void;
   folders: Folder[];
@@ -43,6 +44,7 @@ export default function MessageView({
   onArchive,
   onToggleStar,
   onSpam,
+  onNotSpam,
   onMove,
   onBack,
   folders,
@@ -453,6 +455,81 @@ export default function MessageView({
         >
           {message.subject || '(no subject)'}
         </h1>
+
+        {/* Spam warning */}
+        {(message.spam_score || 0) >= 3 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '10px 14px',
+              marginBottom: 16,
+              background: 'rgba(217,91,78,0.08)',
+              border: '1px solid rgba(217,91,78,0.2)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 12,
+              color: 'var(--red)',
+              lineHeight: 1.5,
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0, marginTop: 1 }}
+            >
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div>
+              <strong>Suspected spam or phishing</strong>
+              {message.spam_labels && message.spam_labels.length > 0 && (
+                <div style={{ marginTop: 2, color: 'var(--text-secondary)', fontSize: 11 }}>
+                  {message.spam_labels.join(' · ')}
+                </div>
+              )}
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={() => onNotSpam(message)}
+                style={{
+                  padding: '4px 12px',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--text-secondary)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Not Spam
+              </button>
+              <button
+                onClick={() => onSpam(message)}
+                style={{
+                  padding: '4px 12px',
+                  background: 'rgba(217,91,78,0.12)',
+                  border: '1px solid rgba(217,91,78,0.25)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--red)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Move to Junk
+              </button>
+            </div>
+          </div>
+        )}
 
         {threadMessages && threadMessages.length > 1 ? (
           <>

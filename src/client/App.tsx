@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api, Account, Folder, Message } from './hooks/api';
+import { api, Account, Folder, Message, Signature } from './hooks/api';
 import { sortFolders, parseAddresses } from './hooks/utils';
 import Sidebar from './components/Sidebar';
 import MessageListComp from './components/MessageList';
 import MessageView from './components/MessageView';
 import Compose from './components/Compose';
 import AddAccount from './components/AddAccount';
+import SignatureEditor from './components/SignatureEditor';
 
 type ComposeState = {
   to: string;
@@ -13,6 +14,7 @@ type ComposeState = {
   body: string;
   inReplyTo?: string;
   forwardAttachments?: import('./hooks/api').Attachment[];
+  accountId?: string;
 } | null;
 
 export type ThemeSetting = 'dark' | 'light' | 'auto';
@@ -57,6 +59,11 @@ export default function App() {
   const [themeSetting, setThemeSetting] = useState<ThemeSetting>(getSavedThemeSetting);
   const theme = resolveTheme(themeSetting);
   const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
+  const [signatures, setSignatures] = useState<Record<string, Signature>>({});
+  const [showSignatureEditor, setShowSignatureEditor] = useState(false);
+  const [spamWhitelist, setSpamWhitelist] = useState<string[]>([]);
+  const [showTrustedSenders, setShowTrustedSenders] = useState(false);
+  const [messageFolders, setMessageFolders] = useState<Folder[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
@@ -117,6 +124,18 @@ export default function App() {
     }
   };
 
+  const handleSaveSignatures = async (sigs: Record<string, Signature>) => {
+    setSignatures(sigs);
+    try {
+      const settings = await api.settings.get();
+      await api.settings.save({ ...settings, signatures: sigs as any });
+      setShowSignatureEditor(false);
+      notify('Signatures saved', 'success');
+    } catch {
+      notify('Failed to save signatures', 'error');
+    }
+  };
+
   // ─── Checkbox toggle with shift-click range ───
   const handleCheck = (msgId: string, checked: boolean, shiftKey: boolean) => {
     setCheckedIds((prev) => {
@@ -168,6 +187,19 @@ export default function App() {
           archiveMessage(fullMessage);
         }
       }
+      if (
+        (e.key === 'j' || e.key === 'J') &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        (checkedIds.size > 0 || fullMessage)
+      ) {
+        e.preventDefault();
+        if (checkedIds.size > 0) {
+          bulkSpam();
+        } else if (fullMessage) {
+          markSpam(fullMessage);
+        }
+      }
       if (e.key === 'Escape' && checkedIds.size > 0) {
         setCheckedIds(new Set());
       }
@@ -197,6 +229,8 @@ export default function App() {
         try {
           const settings = await api.settings.get();
           if (settings.defaultAccountId) setDefaultAccountId(settings.defaultAccountId);
+          if (settings.signatures) setSignatures(settings.signatures);
+          if (settings.spamWhitelist) setSpamWhitelist(settings.spamWhitelist);
           const defaultAcc = settings.defaultAccountId
             ? accs.find((a) => a.id === settings.defaultAccountId)
             : null;
@@ -229,9 +263,9 @@ export default function App() {
       setFolders(flds);
       const inbox = flds.find((f) => f.type === 'inbox');
       if (inbox) {
-        selectFolder(inbox, acc);
+        selectFolder(inbox, acc, true);
       } else if (flds.length > 0) {
-        selectFolder(sortFolders(flds)[0], acc);
+        selectFolder(sortFolders(flds)[0], acc, true);
       }
     } catch {
       notify('Failed to load folders', 'error');
@@ -239,7 +273,7 @@ export default function App() {
   };
 
   // ─── Select folder → load messages (auto-sync if never synced) ───
-  const selectFolder = async (f: Folder, _account?: Account) => {
+  const selectFolder = async (f: Folder, _account?: Account, forceSync?: boolean) => {
     let folder = f;
     setActiveFolder(f);
     setShowStarred(false);
@@ -251,7 +285,7 @@ export default function App() {
     setPage(1);
     setCheckedIds(new Set());
 
-    if (!syncedFolderIds.current.has(folder.id)) {
+    if (forceSync || !syncedFolderIds.current.has(folder.id)) {
       setLoadingMessages(true);
       try {
         const result = await api.folders.sync(folder.id);
@@ -292,6 +326,28 @@ export default function App() {
   };
 
   // ─── Unified inbox ───
+  const syncAllInboxes = async () => {
+    const inboxSyncs: Promise<any>[] = [];
+    for (const acc of accounts) {
+      try {
+        const flds = await api.folders.list(acc.id);
+        const inbox = flds.find((f) => f.type === 'inbox');
+        if (inbox && !syncedFolderIds.current.has(inbox.id)) {
+          inboxSyncs.push(
+            api.folders.sync(inbox.id).then(() => {
+              syncedFolderIds.current.add(inbox.id);
+            }),
+          );
+        }
+      } catch {
+        // skip account if folder list fails
+      }
+    }
+    if (inboxSyncs.length > 0) {
+      await Promise.allSettled(inboxSyncs);
+    }
+  };
+
   const showUnifiedInbox = async () => {
     setShowUnified(true);
     setShowStarred(false);
@@ -301,6 +357,7 @@ export default function App() {
     setSearchQuery('');
     setLoadingMessages(true);
     try {
+      await syncAllInboxes();
       const data = await api.messages.unified(1);
       setMessages(data.messages);
       setTotalMessages(data.total);
@@ -356,7 +413,16 @@ export default function App() {
     try {
       const full = await api.messages.get(msg.id);
       setFullMessage(full);
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: 1 } : m)));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, is_read: 1, spam_score: full.spam_score } : m)),
+      );
+
+      if (msg.account_id !== activeAccount?.id) {
+        const flds = await api.folders.list(msg.account_id);
+        setMessageFolders(flds);
+      } else {
+        setMessageFolders([]);
+      }
 
       const threadId = msg.thread_id || full.thread_id;
       const threadCount = msg.thread_count || full.thread_count || 1;
@@ -470,17 +536,41 @@ export default function App() {
     }
   };
 
+  // ─── Not spam — whitelist sender domain ───
+  const markNotSpam = async (msg: Message) => {
+    try {
+      const result = await api.messages.markNotSpam(msg.id);
+      setMessages((prev) =>
+        prev.map((m) => {
+          const d = m.from_address.split('@')[1] || '';
+          return d === result.domain ? { ...m, spam_score: 0 } : m;
+        }),
+      );
+      if (fullMessage) {
+        setFullMessage({ ...fullMessage, spam_score: 0, spam_labels: [] });
+      }
+      setSpamWhitelist((prev) => (prev.includes(result.domain) ? prev : [...prev, result.domain]));
+      notify(`${result.domain} added to trusted senders`, 'info');
+    } catch {
+      notify('Failed to mark as not spam', 'error');
+    }
+  };
+
+  const removeTrustedDomain = async (domain: string) => {
+    try {
+      const result = await api.messages.removeWhitelistDomain(domain);
+      setSpamWhitelist(result.whitelist);
+      notify(`${domain} removed from trusted senders`, 'info');
+    } catch {
+      notify('Failed to remove domain', 'error');
+    }
+  };
+
   // ─── Archive ───
   const archiveMessage = async (msg: Message) => {
-    const archiveFolder = folders.find((f) => f.type === 'archive');
-    if (!archiveFolder) {
-      notify('No archive folder found', 'error');
-      return;
-    }
-    if (msg.folder_id === archiveFolder.id) return;
     advanceAfterRemove(msg.id);
     try {
-      await api.messages.move(msg.id, archiveFolder.id);
+      await api.messages.archive(msg.id);
       notify('Archived', 'info');
     } catch {
       notify('Failed to archive', 'error');
@@ -531,11 +621,6 @@ export default function App() {
   };
 
   const bulkArchive = async () => {
-    const archiveFolder = folders.find((f) => f.type === 'archive');
-    if (!archiveFolder) {
-      notify('No archive folder found', 'error');
-      return;
-    }
     const ids = Array.from(checkedIds);
     if (ids.length === 0) return;
     setMessages((prev) => prev.filter((m) => !checkedIds.has(m.id)));
@@ -545,10 +630,22 @@ export default function App() {
       setThreadMessages(null);
     }
     setCheckedIds(new Set());
-    const ok = await runConcurrent(ids, (id) =>
-      api.messages.move(id, archiveFolder.id).then(() => {}),
-    );
+    const ok = await runConcurrent(ids, (id) => api.messages.archive(id).then(() => {}));
     notify(`Archived ${ok} message${ok !== 1 ? 's' : ''}`, 'info');
+  };
+
+  const bulkSpam = async () => {
+    const ids = Array.from(checkedIds);
+    if (ids.length === 0) return;
+    setMessages((prev) => prev.filter((m) => !checkedIds.has(m.id)));
+    if (selectedMessage && checkedIds.has(selectedMessage.id)) {
+      setSelectedMessage(null);
+      setFullMessage(null);
+      setThreadMessages(null);
+    }
+    setCheckedIds(new Set());
+    const ok = await runConcurrent(ids, (id) => api.messages.markSpam(id).then(() => {}));
+    notify(`Moved ${ok} message${ok !== 1 ? 's' : ''} to spam`, 'info');
   };
 
   const bulkMarkRead = async (read: boolean) => {
@@ -646,6 +743,7 @@ export default function App() {
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
       body: `\n\n\n--- On ${new Date(msg.date * 1000).toLocaleString()}, ${fromName} wrote ---\n${msg.body_text || ''}`,
       inReplyTo: msg.message_id || undefined,
+      accountId: msg.account_id,
     });
   };
 
@@ -655,7 +753,8 @@ export default function App() {
     const toAddrs = parseAddresses(msg.to_addresses);
     const ccAddrs = msg.cc_addresses ? parseAddresses(msg.cc_addresses) : [];
 
-    const currentEmail = activeAccount?.email || '';
+    const msgAccount = accounts.find((a) => a.id === msg.account_id);
+    const currentEmail = msgAccount?.email || activeAccount?.email || '';
     const allRecipients = [{ name: fromName, address: fromAddr }, ...toAddrs, ...ccAddrs].filter(
       (a) => a.address && a.address.toLowerCase() !== currentEmail.toLowerCase(),
     );
@@ -672,6 +771,7 @@ export default function App() {
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
       body: `\n\n\n--- On ${new Date(msg.date * 1000).toLocaleString()}, ${fromName} wrote ---\n${msg.body_text || ''}`,
       inReplyTo: msg.message_id || undefined,
+      accountId: msg.account_id,
     });
   };
 
@@ -690,6 +790,7 @@ export default function App() {
       subject: msg.subject.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject}`,
       body: `\n\n\n---------- Forwarded message ----------\nFrom: ${msg.from_name || ''} <${msg.from_address}>\nSubject: ${msg.subject}\nDate: ${new Date(msg.date * 1000).toLocaleString()}\n\n${msg.body_text || ''}`,
       forwardAttachments: fwdAttachments.length > 0 ? fwdAttachments : undefined,
+      accountId: msg.account_id,
     });
   };
 
@@ -698,6 +799,15 @@ export default function App() {
     if (showUnified) {
       setRefreshing(true);
       try {
+        for (const acc of accounts) {
+          try {
+            const flds = await api.folders.list(acc.id);
+            const inbox = flds.find((f) => f.type === 'inbox');
+            if (inbox) await api.folders.sync(inbox.id);
+          } catch {
+            // skip account
+          }
+        }
         await loadUnifiedPage(page);
       } catch {
         notify('Sync failed', 'error');
@@ -793,6 +903,9 @@ export default function App() {
           onEmptySpam={emptySpam}
           defaultAccountId={defaultAccountId}
           onSetDefault={setDefaultAccount}
+          onSignatures={() => setShowSignatureEditor(true)}
+          onTrustedSenders={() => setShowTrustedSenders(true)}
+          trustedSenderCount={spamWhitelist.length}
           theme={theme}
           themeSetting={themeSetting}
           onCycleTheme={cycleTheme}
@@ -844,33 +957,44 @@ export default function App() {
           onArchive={archiveMessage}
           onToggleStar={toggleStar}
           onSpam={markSpam}
+          onNotSpam={markNotSpam}
           onMove={moveMessage}
           onBack={() => {
             setSelectedMessage(null);
             setFullMessage(null);
             setThreadMessages(null);
           }}
-          folders={folders}
+          folders={messageFolders.length > 0 ? messageFolders : folders}
           theme={theme}
         />
       </div>
 
       {/* Compose Modal */}
-      {showCompose && activeAccount && (
-        <Compose
-          account={activeAccount}
-          initialTo={showCompose.to}
-          initialSubject={showCompose.subject}
-          initialBody={showCompose.body}
-          inReplyTo={showCompose.inReplyTo}
-          forwardAttachments={showCompose.forwardAttachments}
-          onClose={() => setShowCompose(null)}
-          onSent={() => {
-            setShowCompose(null);
-            notify('Message sent!', 'success');
-          }}
-        />
-      )}
+      {showCompose &&
+        activeAccount &&
+        (() => {
+          const composeAccount =
+            (showCompose.accountId && accounts.find((a) => a.id === showCompose.accountId)) ||
+            activeAccount;
+          return (
+            <Compose
+              account={composeAccount}
+              initialTo={showCompose.to}
+              initialSubject={showCompose.subject}
+              initialBody={showCompose.body}
+              inReplyTo={showCompose.inReplyTo}
+              forwardAttachments={showCompose.forwardAttachments}
+              signature={
+                signatures[composeAccount.id]?.enabled ? signatures[composeAccount.id] : undefined
+              }
+              onClose={() => setShowCompose(null)}
+              onSent={() => {
+                setShowCompose(null);
+                notify('Message sent!', 'success');
+              }}
+            />
+          );
+        })()}
 
       {/* Add Account Modal */}
       {showAddAccount && (
@@ -884,6 +1008,160 @@ export default function App() {
             notify('Account added!', 'success');
           }}
         />
+      )}
+
+      {/* Signature Editor */}
+      {showSignatureEditor && (
+        <SignatureEditor
+          accounts={accounts}
+          signatures={signatures}
+          onSave={handleSaveSignatures}
+          onClose={() => setShowSignatureEditor(false)}
+        />
+      )}
+
+      {/* Trusted Senders */}
+      {showTrustedSenders && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 150,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={() => setShowTrustedSenders(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'var(--backdrop)',
+              backdropFilter: 'blur(4px)',
+            }}
+          />
+          <div
+            className="animate-fade-in"
+            style={{
+              position: 'relative',
+              width: '90%',
+              maxWidth: 440,
+              maxHeight: '70vh',
+              background: 'var(--bg-surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-lg)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div
+              style={{
+                padding: '20px 24px 16px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <h3 style={{ fontSize: 16, fontWeight: 500, flex: 1 }}>Trusted Senders</h3>
+              <button
+                onClick={() => setShowTrustedSenders(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-tertiary)',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 24px' }}>
+              {spamWhitelist.length === 0 ? (
+                <p
+                  style={{
+                    color: 'var(--text-tertiary)',
+                    fontSize: 13,
+                    textAlign: 'center',
+                    padding: '24px 0',
+                  }}
+                >
+                  No trusted sender domains yet. When you mark a message as "Not Spam", the sender's
+                  domain will appear here.
+                </p>
+              ) : (
+                spamWhitelist.map((domain) => (
+                  <div
+                    key={domain}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--border-subtle)',
+                      gap: 10,
+                    }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--text-tertiary)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0 }}
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      {domain}
+                    </span>
+                    <button
+                      onClick={() => removeTrustedDomain(domain)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-tertiary)',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                        transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--red)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                      title="Remove from trusted senders"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div
+              style={{
+                padding: '12px 24px 16px',
+                borderTop: '1px solid var(--border)',
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                lineHeight: 1.5,
+              }}
+            >
+              Emails from trusted domains skip spam detection. Remove a domain to resume checking.
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirmation Dialog */}

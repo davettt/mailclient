@@ -73,9 +73,11 @@ cp .env.example .env
 
 ```env
 PORT=3200
-DATA_DIR=./local_data
+DATA_DIR=/Users/yourname/.mailclient-data   # Absolute path OUTSIDE cloud-synced folders
 ENCRYPTION_KEY=   # Required. Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
+
+> **Important:** Do not store the SQLite database inside a cloud-synced directory (Tresorit, Dropbox, iCloud Drive, etc.). Cloud sync can corrupt SQLite WAL files mid-transaction. Use an absolute path to a local-only directory like `~/.mailclient-data/`.
 
 ### 3. Development
 
@@ -135,7 +137,7 @@ For Gmail, use an [App Password](https://myaccount.google.com/apppasswords) rath
 
 ## Data
 
-All data is stored in `local_data/mail.db` (SQLite). To reset, delete this file and restart.
+All data is stored in the directory specified by `DATA_DIR` (default: `~/.mailclient-data/mail.db`). To reset, delete the database file and restart. The directory is created automatically on first run if it doesn't exist.
 
 ## Notes
 

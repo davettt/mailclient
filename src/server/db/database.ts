@@ -3,7 +3,12 @@ import fs from 'fs';
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 
 const DATA_DIR = process.env.DATA_DIR || './local_data';
-fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR)) {
+  console.error(`FATAL: DATA_DIR does not exist: ${DATA_DIR}`);
+  console.error(`Create it manually to confirm this is the correct location:`);
+  console.error(`  mkdir -p "${DATA_DIR}"`);
+  process.exit(1);
+}
 
 const dbPath = path.join(DATA_DIR, 'mail.db');
 const db: DatabaseType = new Database(dbPath);
@@ -125,6 +130,27 @@ try {
   // Column already exists
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id)');
+
+// Migration: add spam scoring columns
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN spam_score INTEGER DEFAULT 0');
+} catch {
+  // Column already exists
+}
+try {
+  db.exec("ALTER TABLE messages ADD COLUMN spam_signals TEXT DEFAULT '[]'");
+} catch {
+  // Column already exists
+}
+
+// One-time reset: re-score all messages with updated brand detection logic
+const spamV2 = db.prepare("SELECT value FROM settings WHERE key = 'spam_v2_reset'").get() as
+  | { value: string }
+  | undefined;
+if (!spamV2) {
+  db.exec("UPDATE messages SET spam_score = 0, spam_signals = '[]'");
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('spam_v2_reset', '1')").run();
+}
 
 export function normalizeSubject(subject: string): string {
   let s = subject;
@@ -277,6 +303,8 @@ export interface MessageRow {
   size: number;
   created_at: number;
   thread_id: string | null;
+  spam_score: number;
+  spam_signals: string;
 }
 
 export interface AttachmentRow {

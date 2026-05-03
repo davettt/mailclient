@@ -60,6 +60,8 @@ export interface Message {
   thread_id?: string;
   thread_count?: number;
   thread_unread?: number;
+  spam_score?: number;
+  spam_labels?: string[];
   folder_name?: string;
   folder_type?: string;
   account_name?: string;
@@ -81,10 +83,17 @@ export interface MessageList {
   pages: number;
 }
 
+export interface Signature {
+  html: string;
+  text: string;
+  enabled: boolean;
+}
+
 export interface Settings {
-  signatures?: Record<string, { text: string; html?: string; enabled: boolean }>;
+  signatures?: Record<string, Signature>;
   defaultView?: 'comfortable' | 'compact';
   defaultAccountId?: string;
+  spamWhitelist?: string[];
   [key: string]: any;
 }
 
@@ -131,8 +140,19 @@ export const api = {
     update: (id: string, data: { is_read?: boolean; is_starred?: boolean }) =>
       request<Message>(`/messages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: string) => request<{ deleted: boolean }>(`/messages/${id}`, { method: 'DELETE' }),
+    archive: (id: string) =>
+      request<{ moved: boolean }>(`/messages/${id}/archive`, { method: 'POST' }),
     markSpam: (id: string) =>
       request<{ moved: boolean }>(`/messages/${id}/spam`, { method: 'POST' }),
+    markNotSpam: (id: string) =>
+      request<{ domain: string; whitelisted: boolean }>(`/messages/${id}/not-spam`, {
+        method: 'POST',
+      }),
+    removeWhitelistDomain: (domain: string) =>
+      request<{ removed: boolean; whitelist: string[] }>(
+        `/messages/spam-whitelist/${encodeURIComponent(domain)}`,
+        { method: 'DELETE' },
+      ),
     move: (id: string, folderId: string) =>
       request<{ moved: boolean }>(`/messages/${id}/move`, {
         method: 'POST',

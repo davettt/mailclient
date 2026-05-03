@@ -21,6 +21,9 @@ interface SidebarProps {
   onEmptySpam: () => void;
   defaultAccountId: string | null;
   onSetDefault: (a: Account) => void;
+  onSignatures: () => void;
+  onTrustedSenders: () => void;
+  trustedSenderCount: number;
   theme: Theme;
   themeSetting: ThemeSetting;
   onCycleTheme: () => void;
@@ -44,6 +47,9 @@ export default function Sidebar({
   onEmptySpam,
   defaultAccountId,
   onSetDefault,
+  onSignatures,
+  onTrustedSenders,
+  trustedSenderCount,
   theme,
   themeSetting,
   onCycleTheme,
@@ -160,57 +166,58 @@ export default function Sidebar({
           <span style={{ flex: 1 }}>Starred</span>
         </button>
 
-        {sorted.map((folder) => {
-          const isActive = !starredActive && !unifiedActive && activeFolder?.id === folder.id;
-          return (
-            <button
-              key={folder.id}
-              onClick={() => onSelectFolder(folder)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                padding: '9px 10px',
-                background: isActive ? 'var(--bg-active)' : 'transparent',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                fontSize: 13,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.1s',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <span style={{ width: 22, textAlign: 'center', fontSize: 14 }}>
-                {folderIcon(folder.type)}
-              </span>
-              <span style={{ flex: 1 }}>{folder.name}</span>
-              {folder.unread_messages > 0 && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontFamily: 'var(--font-mono)',
-                    color: isActive ? 'var(--accent)' : 'var(--text-tertiary)',
-                    minWidth: 20,
-                    textAlign: 'right',
-                  }}
-                >
-                  {folder.unread_messages}
+        {!unifiedActive &&
+          sorted.map((folder) => {
+            const isActive = !starredActive && activeFolder?.id === folder.id;
+            return (
+              <button
+                key={folder.id}
+                onClick={() => onSelectFolder(folder)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  width: '100%',
+                  padding: '9px 10px',
+                  background: isActive ? 'var(--bg-active)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.1s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <span style={{ width: 22, textAlign: 'center', fontSize: 14 }}>
+                  {folderIcon(folder.type)}
                 </span>
-              )}
-            </button>
-          );
-        })}
+                <span style={{ flex: 1 }}>{folder.name}</span>
+                {folder.unread_messages > 0 && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontFamily: 'var(--font-mono)',
+                      color: isActive ? 'var(--accent)' : 'var(--text-tertiary)',
+                      minWidth: 20,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {folder.unread_messages}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
         {/* Empty Trash button */}
-        {isTrashActive && activeFolder && activeFolder.total_messages > 0 && (
+        {!unifiedActive && isTrashActive && activeFolder && activeFolder.total_messages > 0 && (
           <button
             onClick={onEmptyTrash}
             style={{
@@ -236,7 +243,7 @@ export default function Sidebar({
         )}
 
         {/* Empty Spam button */}
-        {isSpamActive && activeFolder && activeFolder.total_messages > 0 && (
+        {!unifiedActive && isSpamActive && activeFolder && activeFolder.total_messages > 0 && (
           <button
             onClick={onEmptySpam}
             style={{
@@ -262,13 +269,128 @@ export default function Sidebar({
         )}
       </nav>
 
-      {/* Theme toggle */}
+      {/* Signatures + Theme */}
       <div
         style={{
           borderTop: '1px solid var(--border)',
           padding: '6px 12px',
         }}
       >
+        <button
+          onClick={onSignatures}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            width: '100%',
+            padding: '8px 6px',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--text-secondary)',
+            fontSize: 12,
+            cursor: 'pointer',
+            transition: 'color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--bg-hover)';
+            e.currentTarget.style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+          }}
+        >
+          <span
+            style={{
+              width: 28,
+              textAlign: 'center',
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M17.5 2.5c1 1 1.5 2.5.5 3.5L7 17l-4 1 1-4L15 3c1-1 2.5-.5 3.5.5z" />
+              <path d="M15 5l2 2" />
+              <path d="M3 22h18" />
+            </svg>
+          </span>
+          Signatures
+        </button>
+        <button
+          onClick={onTrustedSenders}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            width: '100%',
+            padding: '8px 6px',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--text-secondary)',
+            fontSize: 12,
+            cursor: 'pointer',
+            transition: 'color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--bg-hover)';
+            e.currentTarget.style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+          }}
+        >
+          <span
+            style={{
+              width: 28,
+              textAlign: 'center',
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <polyline points="9 12 11 14 15 10" />
+            </svg>
+          </span>
+          Trusted Senders
+          {trustedSenderCount > 0 && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-tertiary)',
+              }}
+            >
+              {trustedSenderCount}
+            </span>
+          )}
+        </button>
         <button
           onClick={onCycleTheme}
           style={{

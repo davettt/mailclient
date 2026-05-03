@@ -3,6 +3,7 @@ import { simpleParser, ParsedMail } from 'mailparser';
 import { v4 as uuid } from 'uuid';
 import db, { AccountRow, FolderRow, assignThreadIds } from '../db/database';
 import { decrypt } from '../utils/crypto';
+import { scoreSpam } from '../utils/spamCheck';
 
 const FOLDER_TYPE_MAP: Record<string, string> = {
   '\\Inbox': 'inbox',
@@ -227,17 +228,29 @@ export class ImapService {
         'UPDATE messages SET uid = ? WHERE folder_id = ? AND message_id = ? AND uid IS NULL',
       );
 
-      const checkExisting = db.prepare(
+      const checkExistingInFolder = db.prepare(
         'SELECT id FROM messages WHERE folder_id = ? AND message_id = ?',
+      );
+
+      const checkExistingInAccount = db.prepare(
+        'SELECT id, folder_id, uid FROM messages WHERE account_id = ? AND message_id = ?',
       );
 
       const batchInsert = db.transaction((msgs: any[]) => {
         for (const m of msgs) {
-          const [, , folderId, uid, messageId] = m;
+          const [, accountId, folderId, uid, messageId] = m;
           if (messageId) {
-            const existing = checkExisting.get(folderId, messageId) as { id: string } | undefined;
-            if (existing) {
+            const inFolder = checkExistingInFolder.get(folderId, messageId) as
+              | { id: string }
+              | undefined;
+            if (inFolder) {
               updateUid.run(uid, folderId, messageId);
+              continue;
+            }
+            const elsewhere = checkExistingInAccount.get(accountId, messageId) as
+              | { id: string; folder_id: string; uid: number | null }
+              | undefined;
+            if (elsewhere && elsewhere.uid === null) {
               continue;
             }
           }
@@ -306,6 +319,44 @@ export class ImapService {
 
       if (batch.length > 0) {
         batchInsert(batch);
+      }
+
+      // Score unscored messages for spam
+      const unscored = db
+        .prepare(
+          "SELECT id, from_address, from_name, to_addresses, subject FROM messages WHERE account_id = ? AND folder_id = ? AND spam_score = 0 AND spam_signals = '[]'",
+        )
+        .all(account.id, folder.id) as {
+        id: string;
+        from_address: string;
+        from_name: string | null;
+        to_addresses: string;
+        subject: string;
+      }[];
+
+      if (unscored.length > 0) {
+        const wlRow = db.prepare("SELECT value FROM settings WHERE key = 'spamWhitelist'").get() as
+          | { value: string }
+          | undefined;
+        let whitelist: string[] = [];
+        if (wlRow) {
+          try {
+            whitelist = JSON.parse(wlRow.value);
+          } catch {
+            /* empty */
+          }
+        }
+        const updateScore = db.prepare(
+          'UPDATE messages SET spam_score = ?, spam_signals = ? WHERE id = ?',
+        );
+        db.transaction(() => {
+          for (const msg of unscored) {
+            const result = scoreSpam(msg, whitelist);
+            if (result.score > 0) {
+              updateScore.run(result.score, JSON.stringify(result.signals), msg.id);
+            }
+          }
+        })();
       }
 
       // Reconcile: remove local messages whose UIDs no longer exist on server
