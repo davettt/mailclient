@@ -203,6 +203,18 @@ export default function App() {
       if (e.key === 'Escape' && checkedIds.size > 0) {
         setCheckedIds(new Set());
       }
+      if (e.key === 'ArrowDown' && messages.length > 0) {
+        e.preventDefault();
+        const idx = selectedMessage ? messages.findIndex((m) => m.id === selectedMessage.id) : -1;
+        const next = idx < messages.length - 1 ? messages[idx + 1] : null;
+        if (next) selectMessage(next);
+        else if (idx === -1) selectMessage(messages[0]);
+      }
+      if (e.key === 'ArrowUp' && messages.length > 0) {
+        e.preventDefault();
+        const idx = selectedMessage ? messages.findIndex((m) => m.id === selectedMessage.id) : -1;
+        if (idx > 0) selectMessage(messages[idx - 1]);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);

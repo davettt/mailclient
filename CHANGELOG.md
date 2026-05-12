@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.2] - 2026-05-12
+
+### Added
+
+- Arrow key navigation in message list (Up/Down to move between messages, auto-scrolls into view)
+
 ## [0.4.1] - 2026-05-03
 
 ### Changed

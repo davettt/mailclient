@@ -1,6 +1,6 @@
 {
   "name": "mailclient",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "private": true,
   "scripts": {
     "build:server": "tsc -p tsconfig.server.json",

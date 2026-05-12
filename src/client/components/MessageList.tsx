@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Message } from '../hooks/api';
 import { timeAgo, extractName, getInitial, avatarColor } from '../hooks/utils';
 
@@ -53,6 +53,14 @@ export default function MessageList({
 }: MessageListProps) {
   const hasChecked = checkedIds.size > 0;
   const allChecked = messages.length > 0 && messages.every((m) => checkedIds.has(m.id));
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    if (selectedId) {
+      const el = rowRefs.current.get(selectedId);
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedId]);
   return (
     <div
       style={{
@@ -387,6 +395,10 @@ export default function MessageList({
             return (
               <div
                 key={msg.id}
+                ref={(el) => {
+                  if (el) rowRefs.current.set(msg.id, el);
+                  else rowRefs.current.delete(msg.id);
+                }}
                 className="msg-row"
                 onClick={() => onSelect(msg)}
                 style={{
