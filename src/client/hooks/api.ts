@@ -169,6 +169,10 @@ export const api = {
       `${BASE}/messages/${messageId}/cid/${encodeURIComponent(cid)}`,
     getThread: (threadId: string) =>
       request<{ messages: Message[] }>(`/messages/thread/${threadId}`),
+    contacts: (q?: string) =>
+      request<{ address: string; name: string | null }[]>(
+        `/messages/contacts${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+      ),
     search: (accountId: string, query: string) =>
       request<{ messages: Message[] }>(
         `/messages/search/${accountId}?q=${encodeURIComponent(query)}`,

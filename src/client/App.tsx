@@ -750,8 +750,13 @@ export default function App() {
   const handleReply = (msg: Message) => {
     const fromAddr = msg.from_address;
     const fromName = msg.from_name || fromAddr;
+    const to = msg.from_address.includes('<')
+      ? msg.from_address
+      : msg.from_name
+        ? `${msg.from_name} <${fromAddr}>`
+        : fromAddr;
     setShowCompose({
-      to: msg.from_address.includes('<') ? msg.from_address : `${fromName} <${fromAddr}>`,
+      to,
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
       body: `\n\n\n--- On ${new Date(msg.date * 1000).toLocaleString()}, ${fromName} wrote ---\n${msg.body_text || ''}`,
       inReplyTo: msg.message_id || undefined,
@@ -767,16 +772,20 @@ export default function App() {
 
     const msgAccount = accounts.find((a) => a.id === msg.account_id);
     const currentEmail = msgAccount?.email || activeAccount?.email || '';
-    const allRecipients = [{ name: fromName, address: fromAddr }, ...toAddrs, ...ccAddrs].filter(
-      (a) => a.address && a.address.toLowerCase() !== currentEmail.toLowerCase(),
-    );
+    const allRecipients = [
+      { name: msg.from_name || '', address: fromAddr },
+      ...toAddrs,
+      ...ccAddrs,
+    ].filter((a) => a.address && a.address.toLowerCase() !== currentEmail.toLowerCase());
 
     const uniqueRecipients = allRecipients.filter(
       (addr, idx, arr) => arr.findIndex((a) => a.address === addr.address) === idx,
     );
-    const toField = uniqueRecipients
-      .map((a) => (a.name ? `${a.name} <${a.address}>` : a.address))
-      .join(', ');
+    const formatAddr = (a: { name: string; address: string }) =>
+      a.name && a.name.toLowerCase() !== a.address.toLowerCase()
+        ? `${a.name} <${a.address}>`
+        : a.address;
+    const toField = uniqueRecipients.map(formatAddr).join(', ');
 
     setShowCompose({
       to: toField,
@@ -971,6 +980,13 @@ export default function App() {
           onSpam={markSpam}
           onNotSpam={markNotSpam}
           onMove={moveMessage}
+          onComposeTo={(address, name) => {
+            const to =
+              name && name.toLowerCase() !== address.toLowerCase()
+                ? `${name} <${address}>`
+                : address;
+            setShowCompose({ to, subject: '', body: '' });
+          }}
           onBack={() => {
             setSelectedMessage(null);
             setFullMessage(null);

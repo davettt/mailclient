@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -6,6 +6,11 @@ import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Account, Attachment, Signature, api } from '../hooks/api';
 import { formatFileSize } from '../hooks/utils';
+
+interface Contact {
+  address: string;
+  name: string | null;
+}
 
 interface ComposeProps {
   account: Account;
@@ -53,6 +58,14 @@ export default function Compose({
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [fwdAttachments, setFwdAttachments] = useState<Attachment[]>(forwardAttachments || []);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+
+  useEffect(() => {
+    api.messages
+      .contacts()
+      .then(setContacts)
+      .catch(() => {});
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -181,8 +194,8 @@ export default function Compose({
           position: 'relative',
           width: expanded ? 'calc(100% - 48px)' : '90%',
           maxWidth: expanded ? 'none' : 640,
-          height: expanded ? 'calc(100% - 48px)' : undefined,
-          maxHeight: expanded ? 'none' : '85vh',
+          height: expanded ? 'calc(100% - 48px)' : '80vh',
+          maxHeight: expanded ? 'none' : '90vh',
           background: 'var(--bg-surface)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border)',
@@ -272,7 +285,7 @@ export default function Compose({
 
         {/* Fields */}
         <div style={{ padding: '0 20px', flexShrink: 0 }}>
-          <FieldRow label="To" value={to} onChange={setTo} autoFocus />
+          <AddressFieldRow label="To" value={to} onChange={setTo} contacts={contacts} autoFocus />
           {!showCcBcc && (
             <button
               onClick={() => setShowCcBcc(true)}
@@ -291,8 +304,8 @@ export default function Compose({
           )}
           {showCcBcc && (
             <>
-              <FieldRow label="Cc" value={cc} onChange={setCc} />
-              <FieldRow label="Bcc" value={bcc} onChange={setBcc} />
+              <AddressFieldRow label="Cc" value={cc} onChange={setCc} contacts={contacts} />
+              <AddressFieldRow label="Bcc" value={bcc} onChange={setBcc} contacts={contacts} />
             </>
           )}
           <FieldRow label="Subject" value={subject} onChange={setSubject} />
@@ -792,6 +805,205 @@ function FieldRow({
           outline: 'none',
         }}
       />
+    </div>
+  );
+}
+
+function AddressFieldRow({
+  label,
+  value,
+  onChange,
+  contacts,
+  autoFocus,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  contacts: Contact[];
+  autoFocus?: boolean;
+}) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const currentToken = (() => {
+    const parts = value.split(',');
+    return (parts[parts.length - 1] || '').trim().toLowerCase();
+  })();
+
+  const existingAddresses = new Set(
+    value
+      .split(',')
+      .slice(0, -1)
+      .map((p) => {
+        const match = p.match(/<([^>]+)>/);
+        return (match ? match[1] : p.trim()).toLowerCase();
+      })
+      .filter(Boolean),
+  );
+
+  const filtered =
+    currentToken.length >= 1
+      ? contacts
+          .filter((c) => {
+            if (existingAddresses.has(c.address.toLowerCase())) return false;
+            return (
+              c.address.toLowerCase().includes(currentToken) ||
+              (c.name && c.name.toLowerCase().includes(currentToken))
+            );
+          })
+          .slice(0, 8)
+      : [];
+
+  useEffect(() => {
+    setActiveIdx(-1);
+  }, [currentToken]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectContact = (contact: Contact) => {
+    const parts = value.split(',');
+    parts.pop();
+    const formatted =
+      contact.name && contact.name.toLowerCase() !== contact.address.toLowerCase()
+        ? `${contact.name} <${contact.address}>`
+        : contact.address;
+    parts.push(formatted);
+    onChange(parts.filter(Boolean).join(', '));
+    setShowSuggestions(false);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || filtered.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx((prev) => (prev + 1) % filtered.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx((prev) => (prev <= 0 ? filtered.length - 1 : prev - 1));
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      selectContact(filtered[activeIdx]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  return (
+    <div
+      ref={wrapperRef}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        borderBottom: '1px solid var(--border-subtle)',
+        padding: '10px 0',
+        position: 'relative',
+      }}
+    >
+      <span
+        style={{
+          width: 60,
+          fontSize: 12,
+          color: 'var(--text-tertiary)',
+          fontFamily: 'var(--font-mono)',
+          flexShrink: 0,
+        }}
+      >
+        {label}
+      </span>
+      <input
+        ref={inputRef}
+        autoFocus={autoFocus}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setShowSuggestions(true);
+        }}
+        onFocus={() => setShowSuggestions(true)}
+        onKeyDown={handleKeyDown}
+        style={{
+          flex: 1,
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-primary)',
+          fontSize: 14,
+          outline: 'none',
+        }}
+      />
+      {showSuggestions && filtered.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 60,
+            right: 0,
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-md)',
+            zIndex: 60,
+            maxHeight: 240,
+            overflowY: 'auto',
+            padding: '4px 0',
+          }}
+        >
+          {filtered.map((c, i) => (
+            <button
+              key={c.address}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                selectContact(c);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '8px 12px',
+                background: i === activeIdx ? 'var(--bg-hover)' : 'transparent',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-hover)';
+                setActiveIdx(i);
+              }}
+              onMouseLeave={(e) => {
+                if (i !== activeIdx) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              {c.name ? (
+                <>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                    {c.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-tertiary)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {c.address}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{c.address}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -256,6 +256,56 @@ router.put('/settings', (req: Request, res: Response) => {
   res.json({ saved: true });
 });
 
+// Contacts autocomplete (must be before /:id catch-all)
+router.get('/contacts', (_req: Request, res: Response) => {
+  const fromRows = db
+    .prepare(
+      `SELECT from_address as address, from_name as name, MAX(date) as last_seen
+       FROM messages
+       GROUP BY LOWER(from_address)
+       ORDER BY last_seen DESC`,
+    )
+    .all() as { address: string; name: string | null; last_seen: number }[];
+
+  const toRows = db
+    .prepare(`SELECT DISTINCT to_addresses, cc_addresses FROM messages ORDER BY date DESC`)
+    .all() as { to_addresses: string; cc_addresses: string }[];
+
+  const seen = new Set<string>();
+  const contacts: { address: string; name: string | null }[] = [];
+
+  for (const row of fromRows) {
+    const key = row.address.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      contacts.push({ address: row.address, name: row.name || null });
+    }
+  }
+
+  const parseAddrField = (json: string) => {
+    try {
+      const addrs: { address: string; name?: string }[] = JSON.parse(json);
+      for (const a of addrs) {
+        if (!a.address) continue;
+        const key = a.address.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          contacts.push({ address: a.address, name: a.name || null });
+        }
+      }
+    } catch {
+      // skip malformed
+    }
+  };
+
+  for (const row of toRows) {
+    parseAddrField(row.to_addresses);
+    if (row.cc_addresses) parseAddrField(row.cc_addresses);
+  }
+
+  res.json(contacts);
+});
+
 // Spam whitelist management (must be before /:id catch-all)
 router.delete('/spam-whitelist/:domain', (req: Request, res: Response) => {
   const domain = req.params.domain;

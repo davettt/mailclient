@@ -25,6 +25,7 @@ interface MessageViewProps {
   onSpam: (m: Message) => void;
   onNotSpam: (m: Message) => void;
   onMove: (m: Message, folderId: string) => void;
+  onComposeTo: (address: string, name?: string) => void;
   onBack: () => void;
   folders: Folder[];
   theme: Theme;
@@ -46,6 +47,7 @@ export default function MessageView({
   onSpam,
   onNotSpam,
   onMove,
+  onComposeTo,
   onBack,
   folders,
   theme,
@@ -95,7 +97,9 @@ export default function MessageView({
         : clean;
       const heightScript = `<script>
         function reportHeight(){parent.postMessage({type:'iframe-height',height:document.body.scrollHeight},'*')}
-        window.addEventListener('load',function(){reportHeight();setTimeout(reportHeight,300);setTimeout(reportHeight,1000)});
+        document.addEventListener('DOMContentLoaded',function(){reportHeight();setTimeout(reportHeight,50)});
+        window.addEventListener('load',function(){reportHeight();setTimeout(reportHeight,300)});
+        new ResizeObserver(reportHeight).observe(document.documentElement);
         new MutationObserver(reportHeight).observe(document.body,{childList:true,subtree:true});
       </script>`;
       const styled = `<html><head><base target="_blank"><style>
@@ -608,17 +612,24 @@ export default function MessageView({
                             gap: 8,
                           }}
                         >
-                          <span
-                            style={{
-                              fontWeight: isActive ? 600 : 500,
-                              fontSize: isActive ? 14 : 13,
-                            }}
-                          >
-                            {tmFrom}
-                          </span>
-                          {isActive && (
-                            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                              &lt;{tm.from_address}&gt;
+                          {isActive ? (
+                            <ClickableAddress
+                              name={tmFrom}
+                              address={tm.from_address}
+                              onClick={() => onComposeTo(tm.from_address, tmFrom)}
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 14,
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                fontWeight: 500,
+                                fontSize: 13,
+                              }}
+                            >
+                              {tmFrom}
                             </span>
                           )}
                           {!isActive && (
@@ -644,7 +655,19 @@ export default function MessageView({
                                 marginTop: 2,
                               }}
                             >
-                              to {tmTo.map((a) => a.name || a.address).join(', ')}
+                              to{' '}
+                              {tmTo.map((a, i) => (
+                                <React.Fragment key={a.address + i}>
+                                  {i > 0 && ', '}
+                                  <ClickableAddress
+                                    name={a.name || undefined}
+                                    address={a.address}
+                                    onClick={() => onComposeTo(a.address, a.name || undefined)}
+                                    style={{ fontSize: 12 }}
+                                    compact
+                                  />
+                                </React.Fragment>
+                              ))}
                             </div>
                             <div
                               style={{
@@ -741,15 +764,43 @@ export default function MessageView({
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{fromName}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    &lt;{message.from_address}&gt;
-                  </span>
+                  <ClickableAddress
+                    name={fromName}
+                    address={message.from_address}
+                    onClick={() => onComposeTo(message.from_address, fromName)}
+                    style={{ fontWeight: 600, fontSize: 14 }}
+                  />
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                  to {toAddrs.map((a) => a.name || a.address).join(', ')}
+                  to{' '}
+                  {toAddrs.map((a, i) => (
+                    <React.Fragment key={a.address + i}>
+                      {i > 0 && ', '}
+                      <ClickableAddress
+                        name={a.name || undefined}
+                        address={a.address}
+                        onClick={() => onComposeTo(a.address, a.name || undefined)}
+                        style={{ fontSize: 12 }}
+                        compact
+                      />
+                    </React.Fragment>
+                  ))}
                   {ccAddrs.length > 0 && (
-                    <span> · cc: {ccAddrs.map((a) => a.name || a.address).join(', ')}</span>
+                    <span>
+                      {' · cc: '}
+                      {ccAddrs.map((a, i) => (
+                        <React.Fragment key={a.address + i}>
+                          {i > 0 && ', '}
+                          <ClickableAddress
+                            name={a.name || undefined}
+                            address={a.address}
+                            onClick={() => onComposeTo(a.address, a.name || undefined)}
+                            style={{ fontSize: 12 }}
+                            compact
+                          />
+                        </React.Fragment>
+                      ))}
+                    </span>
                   )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
@@ -1010,6 +1061,80 @@ const menuItemDisabledStyle: React.CSSProperties = {
   color: 'var(--text-tertiary)',
   cursor: 'default',
 };
+
+function ClickableAddress({
+  name,
+  address,
+  onClick,
+  style,
+  compact,
+}: {
+  name?: string;
+  address: string;
+  onClick: () => void;
+  style?: React.CSSProperties;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        style={{
+          cursor: 'pointer',
+          color: 'var(--text-tertiary)',
+          transition: 'color 0.15s',
+          ...style,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+        title={`Compose email to ${address}`}
+      >
+        {name || address}
+      </span>
+    );
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        style={{
+          cursor: 'pointer',
+          transition: 'color 0.15s',
+          ...style,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+        title={`Compose email to ${address}`}
+      >
+        {name || address}
+      </span>
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        style={{
+          fontSize: 12,
+          color: 'var(--text-tertiary)',
+          cursor: 'pointer',
+          transition: 'color 0.15s',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+        title={`Compose email to ${address}`}
+      >
+        &lt;{address}&gt;
+      </span>
+    </span>
+  );
+}
 
 function AttachmentList({ attachments }: { attachments: Attachment[] }) {
   if (attachments.length === 0) return null;
