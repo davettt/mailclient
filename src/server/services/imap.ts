@@ -565,6 +565,148 @@ export class ImapService {
     await client.append(sentFolder.path, rawMessage, ['\\Seen']);
   }
 
+  private async searchFolder(
+    client: ImapFlow,
+    account: AccountRow,
+    folder: FolderRow,
+    query: string,
+    maxResults: number,
+  ): Promise<number> {
+    const lock = await client.getMailboxLock(folder.path);
+    try {
+      let uids: number[] = [];
+      try {
+        const result = await client.search(
+          { or: [{ subject: query }, { from: query }, { to: query }] },
+          { uid: true },
+        );
+        if (Array.isArray(result)) uids = result;
+      } catch {
+        const sets = await Promise.all([
+          client
+            .search({ subject: query }, { uid: true })
+            .then((r) => (Array.isArray(r) ? r : []))
+            .catch(() => [] as number[]),
+          client
+            .search({ from: query }, { uid: true })
+            .then((r) => (Array.isArray(r) ? r : []))
+            .catch(() => [] as number[]),
+          client
+            .search({ to: query }, { uid: true })
+            .then((r) => (Array.isArray(r) ? r : []))
+            .catch(() => [] as number[]),
+        ]);
+        uids = [...new Set(sets.flat())];
+      }
+
+      if (!uids.length) return 0;
+
+      const checkExisting = db.prepare('SELECT id FROM messages WHERE folder_id = ? AND uid = ?');
+      const needed: number[] = [];
+      for (const uid of uids) {
+        if (needed.length >= maxResults) break;
+        if (!checkExisting.get(folder.id, uid)) needed.push(uid);
+      }
+      if (!needed.length) return 0;
+
+      const insertMsg = db.prepare(`
+        INSERT OR IGNORE INTO messages (
+          id, account_id, folder_id, uid, message_id, in_reply_to,
+          from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
+          subject, date,
+          is_read, is_starred, is_draft, has_attachments, flags, size
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const batch: any[] = [];
+      for await (const msg of client.fetch(
+        { uid: needed.join(',') },
+        { envelope: true, flags: true, uid: true, size: true, bodyStructure: true },
+      )) {
+        const env = msg.envelope;
+        if (!env) continue;
+        const flags = Array.from(msg.flags || []);
+        batch.push([
+          uuid(),
+          account.id,
+          folder.id,
+          msg.uid,
+          env.messageId || null,
+          env.inReplyTo || null,
+          env.from?.[0]?.address || '',
+          env.from?.[0]?.name || '',
+          extractEnvelopeAddresses(env.to),
+          extractEnvelopeAddresses(env.cc),
+          extractEnvelopeAddresses(env.bcc),
+          env.subject || '(no subject)',
+          env.date ? Math.floor(env.date.getTime() / 1000) : Math.floor(Date.now() / 1000),
+          flags.includes('\\Seen') ? 1 : 0,
+          flags.includes('\\Flagged') ? 1 : 0,
+          flags.includes('\\Draft') ? 1 : 0,
+          hasAttachmentParts(msg.bodyStructure) ? 1 : 0,
+          JSON.stringify(flags),
+          msg.size || 0,
+        ]);
+      }
+
+      if (batch.length > 0) {
+        db.transaction(() => {
+          for (const m of batch) insertMsg.run(...m);
+        })();
+      }
+      return batch.length;
+    } finally {
+      lock.release();
+    }
+  }
+
+  async searchServer(account: AccountRow, query: string, maxResults = 200): Promise<number> {
+    // Force a fresh connection to avoid stale sockets
+    await this.disconnect(account.id);
+    const client = await this.connect(account);
+
+    const allFolder = db
+      .prepare("SELECT * FROM folders WHERE account_id = ? AND type = 'all' LIMIT 1")
+      .get(account.id) as FolderRow | undefined;
+
+    const folders: FolderRow[] = allFolder
+      ? [allFolder]
+      : (db
+          .prepare(
+            "SELECT * FROM folders WHERE account_id = ? AND type NOT IN ('trash','spam','drafts','starred') ORDER BY CASE type WHEN 'inbox' THEN 1 WHEN 'sent' THEN 2 WHEN 'archive' THEN 3 ELSE 4 END",
+          )
+          .all(account.id) as FolderRow[]);
+
+    console.log(
+      `Server search "${query}" for ${account.email}: searching ${folders.length} folders`,
+    );
+    let totalInserted = 0;
+
+    for (const folder of folders) {
+      if (totalInserted >= maxResults) break;
+      try {
+        const timeout = new Promise<number>((_, reject) =>
+          setTimeout(() => reject(new Error('Folder search timeout')), 30000),
+        );
+        const inserted = await Promise.race([
+          this.searchFolder(client, account, folder, query, maxResults - totalInserted),
+          timeout,
+        ]);
+        totalInserted += inserted;
+        console.log(`  ${folder.name}: found ${inserted} new messages`);
+      } catch (err) {
+        console.error(`  ${folder.name}: search failed -`, (err as Error).message);
+      }
+    }
+
+    if (totalInserted > 0) {
+      assignThreadIds(account.id);
+    }
+
+    console.log(`Server search complete: ${totalInserted} new messages fetched`);
+    return totalInserted;
+  }
+
   async disconnectAll(): Promise<void> {
     for (const [, timer] of this.idleTimers) {
       clearTimeout(timer);

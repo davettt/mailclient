@@ -986,22 +986,13 @@ router.delete('/spam/:accountId', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/search/:accountId', (req: Request, res: Response) => {
-  const { accountId } = req.params;
-  const query = req.query.q as string;
-
-  if (!query || query.length < 2) {
-    res.json({ messages: [] });
-    return;
-  }
-
-  const safeQuery = '"' + query.replace(/"/g, '""') + '"';
-
-  const messages = db
+const searchLocalFts = (accountId: string, safeQuery: string, rawQuery: string) =>
+  db
     .prepare(
       `
     WITH matching AS (
-      SELECT m.*, f.name as folder_name,
+      SELECT m.*, f.name as folder_name, f.type as folder_type,
+        CASE WHEN f.name LIKE ? COLLATE NOCASE THEN 1 ELSE 0 END as folder_match,
         ROW_NUMBER() OVER (
           PARTITION BY COALESCE(m.thread_id, m.id)
           ORDER BY m.date DESC, m.rowid DESC
@@ -1009,8 +1000,10 @@ router.get('/search/:accountId', (req: Request, res: Response) => {
       FROM messages m
       JOIN folders f ON m.folder_id = f.id
       WHERE m.account_id = ?
-        AND m.rowid IN (
-          SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?
+        AND f.type NOT IN ('trash', 'spam')
+        AND (
+          m.rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)
+          OR f.name LIKE ? COLLATE NOCASE
         )
     ),
     thread_stats AS (
@@ -1018,9 +1011,12 @@ router.get('/search/:accountId', (req: Request, res: Response) => {
         COUNT(*) as thread_count,
         SUM(CASE WHEN m.is_read = 0 THEN 1 ELSE 0 END) as thread_unread
       FROM messages m
+      JOIN folders f ON m.folder_id = f.id
       WHERE m.account_id = ?
-        AND m.rowid IN (
-          SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?
+        AND f.type NOT IN ('trash', 'spam')
+        AND (
+          m.rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)
+          OR f.name LIKE ? COLLATE NOCASE
         )
       GROUP BY COALESCE(m.thread_id, m.id)
     )
@@ -1034,11 +1030,45 @@ router.get('/search/:accountId', (req: Request, res: Response) => {
     FROM matching r
     JOIN thread_stats ts ON COALESCE(r.thread_id, r.id) = ts.tid
     WHERE r.rn = 1
-    ORDER BY r.date DESC
-    LIMIT 50
+    ORDER BY r.folder_match DESC, r.date DESC
+    LIMIT 200
   `,
     )
-    .all(accountId, safeQuery + '*', accountId, safeQuery + '*');
+    .all(
+      `%${rawQuery}%`,
+      accountId,
+      safeQuery + '*',
+      `%${rawQuery}%`,
+      accountId,
+      safeQuery + '*',
+      `%${rawQuery}%`,
+    );
+
+router.get('/search/:accountId', async (req: Request, res: Response) => {
+  const { accountId } = req.params;
+  const query = req.query.q as string;
+  const deep = req.query.deep === '1';
+
+  if (!query || query.length < 2) {
+    res.json({ messages: [] });
+    return;
+  }
+
+  if (deep && query.length >= 3) {
+    try {
+      const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as
+        | AccountRow
+        | undefined;
+      if (account) {
+        await imapService.searchServer(account, query);
+      }
+    } catch (err) {
+      console.error('IMAP server search failed:', err);
+    }
+  }
+
+  const safeQuery = '"' + query.replace(/"/g, '""') + '"';
+  const messages = searchLocalFts(accountId, safeQuery, query);
 
   res.json({ messages });
 });

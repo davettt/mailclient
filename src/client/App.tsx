@@ -475,19 +475,43 @@ export default function App() {
       return;
     }
     searchTimeout.current = setTimeout(async () => {
-      if (!activeAccount) return;
+      const searchAccounts = activeAccount ? [activeAccount] : accounts;
+      if (searchAccounts.length === 0) return;
       setLoadingMessages(true);
       try {
-        const data = await api.messages.search(activeAccount.id, q);
-        setMessages(data.messages);
-        setTotalMessages(data.messages.length);
+        const results = await Promise.all(searchAccounts.map((a) => api.messages.search(a.id, q)));
+        const all = results.flatMap((r) => r.messages);
+        all.sort((a, b) => b.date - a.date);
+        setMessages(all);
+        setTotalMessages(all.length);
         setPage(1);
         setPages(1);
       } catch {
         // Silently fail search
       }
       setLoadingMessages(false);
-    }, 300);
+    }, 500);
+  };
+
+  const handleDeepSearch = async () => {
+    if (!searchQuery.trim() || searchQuery.length < 3) return;
+    const searchAccounts = activeAccount ? [activeAccount] : accounts;
+    if (searchAccounts.length === 0) return;
+    setLoadingMessages(true);
+    try {
+      const results = await Promise.all(
+        searchAccounts.map((a) => api.messages.search(a.id, searchQuery, true)),
+      );
+      const all = results.flatMap((r) => r.messages);
+      all.sort((a, b) => b.date - a.date);
+      setMessages(all);
+      setTotalMessages(all.length);
+      setPage(1);
+      setPages(1);
+    } catch {
+      notify('Server search failed', 'error');
+    }
+    setLoadingMessages(false);
   };
 
   // ─── Toggle star ───
@@ -963,6 +987,7 @@ export default function App() {
           onBulkMarkRead={bulkMarkRead}
           onSelectAll={() => setCheckedIds(new Set(messages.map((m) => m.id)))}
           onDeselectAll={() => setCheckedIds(new Set())}
+          onDeepSearch={handleDeepSearch}
         />
 
         {/* Message View */}

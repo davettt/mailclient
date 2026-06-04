@@ -25,6 +25,7 @@ interface MessageListProps {
   onBulkMarkRead: (read: boolean) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  onDeepSearch?: () => void;
 }
 
 export default function MessageList({
@@ -50,6 +51,7 @@ export default function MessageList({
   onBulkMarkRead,
   onSelectAll,
   onDeselectAll,
+  onDeepSearch,
 }: MessageListProps) {
   const hasChecked = checkedIds.size > 0;
   const allChecked = messages.length > 0 && messages.every((m) => checkedIds.has(m.id));
@@ -220,6 +222,24 @@ export default function MessageList({
               outline: 'none',
             }}
           />
+          {searchQuery && onDeepSearch && (
+            <button
+              onClick={onDeepSearch}
+              title="Search mail server for older messages"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--accent)',
+                cursor: 'pointer',
+                fontSize: 11,
+                padding: '2px 6px',
+                borderRadius: 'var(--radius-sm)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Search server
+            </button>
+          )}
           {searchQuery && (
             <button
               onClick={() => onSearchChange('')}

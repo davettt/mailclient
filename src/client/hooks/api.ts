@@ -173,9 +173,9 @@ export const api = {
       request<{ address: string; name: string | null }[]>(
         `/messages/contacts${q ? `?q=${encodeURIComponent(q)}` : ''}`,
       ),
-    search: (accountId: string, query: string) =>
+    search: (accountId: string, query: string, deep = false) =>
       request<{ messages: Message[] }>(
-        `/messages/search/${accountId}?q=${encodeURIComponent(query)}`,
+        `/messages/search/${accountId}?q=${encodeURIComponent(query)}${deep ? '&deep=1' : ''}`,
       ),
     send: (data: {
       account_id: string;
