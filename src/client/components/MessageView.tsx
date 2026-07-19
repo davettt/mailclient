@@ -102,15 +102,25 @@ export default function MessageView({
         new ResizeObserver(reportHeight).observe(document.documentElement);
         new MutationObserver(reportHeight).observe(document.body,{childList:true,subtree:true});
       </script>`;
-      const styled = `<html><head><base target="_blank"><style>
-        html, body { overflow: hidden; }
-        body { font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.6;
-               color: ${isDark ? '#E8E4DF' : '#1a1a1a'}; background: ${isDark ? '#0C0C0C' : '#f8f7f5'}; padding: 16px; margin: 0; }
-        a { color: ${isDark ? '#D4944A' : '#c0823a'}; }
-        img { max-width: 100%; height: auto; }
-        blockquote { border-left: 3px solid ${isDark ? '#333' : '#d8d4cf'}; padding-left: 12px; margin-left: 0; color: ${isDark ? '#888' : '#6b6560'}; }
-        pre, code { background: ${isDark ? '#1C1C1C' : '#f0eeeb'}; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-      </style></head><body>${withCid}${heightScript}</body></html>`;
+      const hasOwnBackground = /background[-:]|bgcolor/i.test(withCid);
+      const styled =
+        isDark && hasOwnBackground
+          ? `<html><head><base target="_blank"><style>
+            html, body { overflow: hidden; }
+            body { font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.6;
+                   color: #1a1a1a; background: #f8f7f5; padding: 16px; margin: 0; }
+            img { max-width: 100%; height: auto; }
+          </style></head><body>${withCid}${heightScript}</body></html>`
+          : `<html><head><base target="_blank"><style>
+            html, body { overflow: hidden; }
+            body { font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.6;
+                   color: ${isDark ? '#E8E4DF' : '#1a1a1a'}; background: ${isDark ? '#0C0C0C' : '#f8f7f5'}; padding: 16px; margin: 0; }
+            a { color: ${isDark ? '#D4944A' : '#c0823a'}; }
+            img { max-width: 100%; height: auto; }
+            blockquote { border-left: 3px solid ${isDark ? '#333' : '#d8d4cf'}; padding-left: 12px; margin-left: 0; color: ${isDark ? '#888' : '#6b6560'}; }
+            pre, code { background: ${isDark ? '#1C1C1C' : '#f0eeeb'}; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+            ${isDark ? `table, th, td { background-color: #1C1C1C !important; color: #E8E4DF !important; border-color: #333 !important; }` : ''}
+          </style></head><body>${withCid}${heightScript}</body></html>`;
       setSanitizedHtml(styled);
     } else {
       setSanitizedHtml('');

@@ -28,7 +28,7 @@ if (process.env.NODE_ENV !== 'production') {
   allowedOrigins.push('http://localhost:5173');
 }
 app.use(cors({ origin: allowedOrigins }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 app.use('/api/accounts', accountRoutes);
 app.use('/api/folders', folderRoutes);

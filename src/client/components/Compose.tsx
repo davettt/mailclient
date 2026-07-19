@@ -471,8 +471,9 @@ export default function Compose({
             multiple
             style={{ display: 'none' }}
             onChange={(e) => {
-              if (e.target.files) {
-                setAttachedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+              const files = Array.from(e.target.files || []);
+              if (files.length > 0) {
+                setAttachedFiles((prev) => [...prev, ...files]);
               }
               e.target.value = '';
             }}
