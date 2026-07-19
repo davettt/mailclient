@@ -52,16 +52,14 @@ router.get('/:accountId', (req: Request, res: Response) => {
 router.post('/:folderId/sync', async (req: Request, res: Response) => {
   try {
     const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(req.params.folderId) as
-      | FolderRow
-      | undefined;
+      FolderRow | undefined;
     if (!folder) {
       res.status(404).json({ error: 'Folder not found' });
       return;
     }
 
     const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(folder.account_id) as
-      | AccountRow
-      | undefined;
+      AccountRow | undefined;
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;

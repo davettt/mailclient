@@ -241,15 +241,13 @@ export class ImapService {
           const [, accountId, folderId, uid, messageId] = m;
           if (messageId) {
             const inFolder = checkExistingInFolder.get(folderId, messageId) as
-              | { id: string }
-              | undefined;
+              { id: string } | undefined;
             if (inFolder) {
               updateUid.run(uid, folderId, messageId);
               continue;
             }
             const elsewhere = checkExistingInAccount.get(accountId, messageId) as
-              | { id: string; folder_id: string; uid: number | null }
-              | undefined;
+              { id: string; folder_id: string; uid: number | null } | undefined;
             if (elsewhere && elsewhere.uid === null) {
               continue;
             }
@@ -336,8 +334,7 @@ export class ImapService {
 
       if (unscored.length > 0) {
         const wlRow = db.prepare("SELECT value FROM settings WHERE key = 'spamWhitelist'").get() as
-          | { value: string }
-          | undefined;
+          { value: string } | undefined;
         let whitelist: string[] = [];
         if (wlRow) {
           try {

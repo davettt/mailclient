@@ -79,8 +79,7 @@ router.post('/imap', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id) as
-    | AccountRow
-    | undefined;
+    AccountRow | undefined;
   if (!account) {
     res.status(404).json({ error: 'Account not found' });
     return;
@@ -94,8 +93,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/sync', async (req: Request, res: Response) => {
   try {
     const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(req.params.id) as
-      | AccountRow
-      | undefined;
+      AccountRow | undefined;
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;

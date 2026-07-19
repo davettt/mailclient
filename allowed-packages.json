@@ -1,0 +1,305 @@
+{
+  "@tiptap/extension-link": {
+    "repo": "https://github.com/ueberdosis/tiptap",
+    "publisher": "arnaugomeztiptap",
+    "weeklyDownloads": 12004536,
+    "versions": 347,
+    "verified": "2026-07-17"
+  },
+  "@tiptap/extension-placeholder": {
+    "repo": "https://github.com/ueberdosis/tiptap",
+    "publisher": "arnaugomeztiptap",
+    "weeklyDownloads": 7358352,
+    "versions": 343,
+    "verified": "2026-07-17"
+  },
+  "@tiptap/extension-underline": {
+    "repo": "https://github.com/ueberdosis/tiptap",
+    "publisher": "arnaugomeztiptap",
+    "weeklyDownloads": 11556483,
+    "versions": 329,
+    "verified": "2026-07-17"
+  },
+  "@tiptap/pm": {
+    "repo": "https://github.com/ueberdosis/tiptap",
+    "publisher": "arnaugomeztiptap",
+    "weeklyDownloads": 13376452,
+    "versions": 277,
+    "verified": "2026-07-17"
+  },
+  "@tiptap/react": {
+    "repo": "https://github.com/ueberdosis/tiptap",
+    "publisher": "arnaugomeztiptap",
+    "weeklyDownloads": 10743146,
+    "versions": 404,
+    "verified": "2026-07-17"
+  },
+  "@tiptap/starter-kit": {
+    "repo": "https://github.com/ueberdosis/tiptap",
+    "publisher": "arnaugomeztiptap",
+    "weeklyDownloads": 11380954,
+    "versions": 494,
+    "verified": "2026-07-17"
+  },
+  "@types/better-sqlite3": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 3418773,
+    "versions": 33,
+    "verified": "2026-07-17"
+  },
+  "@types/cors": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 22815646,
+    "versions": 34,
+    "verified": "2026-07-17"
+  },
+  "@types/dompurify": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 6240697,
+    "versions": 38,
+    "verified": "2026-07-17",
+    "reviewed": true
+  },
+  "@types/express": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 55687859,
+    "versions": 57,
+    "verified": "2026-07-17"
+  },
+  "@types/mailparser": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 1931221,
+    "versions": 34,
+    "verified": "2026-07-17"
+  },
+  "@types/nodemailer": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 8146041,
+    "versions": 92,
+    "verified": "2026-07-17"
+  },
+  "@types/react": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 128616138,
+    "versions": 705,
+    "verified": "2026-07-17"
+  },
+  "@types/react-dom": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 105085184,
+    "versions": 182,
+    "verified": "2026-07-17"
+  },
+  "@types/uuid": {
+    "repo": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+    "publisher": "types",
+    "weeklyDownloads": 36470547,
+    "versions": 60,
+    "verified": "2026-07-17",
+    "reviewed": true
+  },
+  "@typescript-eslint/eslint-plugin": {
+    "repo": "https://github.com/typescript-eslint/typescript-eslint",
+    "publisher": "jameshenry",
+    "weeklyDownloads": 117174659,
+    "versions": 4678,
+    "verified": "2026-07-17"
+  },
+  "@typescript-eslint/parser": {
+    "repo": "https://github.com/typescript-eslint/typescript-eslint",
+    "publisher": "jameshenry",
+    "weeklyDownloads": 121183187,
+    "versions": 4761,
+    "verified": "2026-07-17"
+  },
+  "@vitejs/plugin-react": {
+    "repo": "https://github.com/vitejs/vite-plugin-react",
+    "publisher": "yyx990803",
+    "weeklyDownloads": 67875554,
+    "versions": 84,
+    "verified": "2026-07-17"
+  },
+  "better-sqlite3": {
+    "repo": "git://github.com/WiseLibs/better-sqlite3",
+    "publisher": "joshuawise",
+    "weeklyDownloads": 7669995,
+    "versions": 155,
+    "verified": "2026-07-17"
+  },
+  "concurrently": {
+    "repo": "https://github.com/open-cli-tools/concurrently",
+    "publisher": "kimmobrunfeldt",
+    "weeklyDownloads": 17960657,
+    "versions": 70,
+    "verified": "2026-07-17"
+  },
+  "cors": {
+    "repo": "https://github.com/expressjs/cors",
+    "publisher": "dougwilson",
+    "weeklyDownloads": 61572100,
+    "versions": 35,
+    "verified": "2026-07-17"
+  },
+  "dompurify": {
+    "repo": "git://github.com/cure53/DOMPurify",
+    "publisher": "cure53",
+    "weeklyDownloads": 48008332,
+    "versions": 149,
+    "verified": "2026-07-17"
+  },
+  "dotenv": {
+    "repo": "git://github.com/motdotla/dotenv",
+    "publisher": "scottmotte",
+    "weeklyDownloads": 143515549,
+    "versions": 104,
+    "verified": "2026-07-17"
+  },
+  "eslint": {
+    "repo": "https://github.com/eslint/eslint",
+    "publisher": "openjsfoundation",
+    "weeklyDownloads": 134344329,
+    "versions": 424,
+    "verified": "2026-07-17"
+  },
+  "eslint-plugin-import": {
+    "repo": "https://github.com/import-js/eslint-plugin-import",
+    "publisher": "benmosher",
+    "weeklyDownloads": 51207731,
+    "versions": 132,
+    "verified": "2026-07-17"
+  },
+  "eslint-plugin-react": {
+    "repo": "https://github.com/jsx-eslint/eslint-plugin-react",
+    "publisher": "ljharb",
+    "weeklyDownloads": 50038466,
+    "versions": 216,
+    "verified": "2026-07-17"
+  },
+  "eslint-plugin-react-hooks": {
+    "repo": "https://github.com/facebook/react",
+    "publisher": "react-bot",
+    "weeklyDownloads": 83913269,
+    "versions": 2714,
+    "verified": "2026-07-17"
+  },
+  "eslint-plugin-security": {
+    "repo": "https://github.com/eslint-community/eslint-plugin-security",
+    "publisher": "nzakas",
+    "weeklyDownloads": 2756194,
+    "versions": 16,
+    "verified": "2026-07-17"
+  },
+  "express": {
+    "repo": "https://github.com/expressjs/express",
+    "publisher": "wesleytodd",
+    "weeklyDownloads": 108517424,
+    "versions": 288,
+    "verified": "2026-07-17"
+  },
+  "html-validate": {
+    "repo": "https://gitlab.com/html-validate/html-validate",
+    "publisher": "ext",
+    "weeklyDownloads": 528297,
+    "versions": 332,
+    "verified": "2026-07-17"
+  },
+  "husky": {
+    "repo": "https://github.com/typicode/husky",
+    "publisher": "typicode",
+    "weeklyDownloads": 29743983,
+    "versions": 215,
+    "verified": "2026-07-17"
+  },
+  "imapflow": {
+    "repo": "https://github.com/postalsys/imapflow",
+    "publisher": "andris",
+    "weeklyDownloads": 994190,
+    "versions": 230,
+    "verified": "2026-07-17"
+  },
+  "license-checker": {
+    "repo": "ssh://git@github.com/davglass/license-checker",
+    "publisher": "davglass",
+    "weeklyDownloads": 911994,
+    "versions": 74,
+    "verified": "2026-07-17"
+  },
+  "mailparser": {
+    "repo": "https://github.com/nodemailer/mailparser",
+    "publisher": "andris",
+    "weeklyDownloads": 3476528,
+    "versions": 131,
+    "verified": "2026-07-17"
+  },
+  "nodemailer": {
+    "repo": "https://github.com/nodemailer/nodemailer",
+    "publisher": "andris",
+    "weeklyDownloads": 16555657,
+    "versions": 303,
+    "verified": "2026-07-17"
+  },
+  "prettier": {
+    "repo": "https://github.com/prettier/prettier",
+    "publisher": "jlongster",
+    "weeklyDownloads": 112336187,
+    "versions": 194,
+    "verified": "2026-07-17"
+  },
+  "react": {
+    "repo": "https://github.com/facebook/react",
+    "publisher": "fb",
+    "weeklyDownloads": 145362748,
+    "versions": 2873,
+    "verified": "2026-07-17"
+  },
+  "react-dom": {
+    "repo": "https://github.com/facebook/react",
+    "publisher": "fb",
+    "weeklyDownloads": 137308383,
+    "versions": 2828,
+    "verified": "2026-07-17"
+  },
+  "tsx": {
+    "repo": "https://github.com/privatenumber/tsx",
+    "publisher": "hirokiosame",
+    "weeklyDownloads": 73047720,
+    "versions": 128,
+    "verified": "2026-07-17"
+  },
+  "typescript": {
+    "repo": "https://github.com/microsoft/TypeScript",
+    "publisher": "microsoft1es",
+    "weeklyDownloads": 218061988,
+    "versions": 3770,
+    "verified": "2026-07-17"
+  },
+  "uuid": {
+    "repo": "https://github.com/uuidjs/uuid",
+    "publisher": "broofa",
+    "weeklyDownloads": 246676683,
+    "versions": 54,
+    "verified": "2026-07-17"
+  },
+  "vite": {
+    "repo": "https://github.com/vitejs/vite",
+    "publisher": "yyx990803",
+    "weeklyDownloads": 142792201,
+    "versions": 745,
+    "verified": "2026-07-17"
+  },
+  "zod": {
+    "repo": "https://github.com/colinhacks/zod",
+    "publisher": "colinhacks",
+    "weeklyDownloads": 212232594,
+    "versions": 875,
+    "verified": "2026-07-17"
+  }
+}

@@ -129,6 +129,7 @@ export default function MessageView({
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
+      if (e.origin !== 'null') return;
       if (e.data?.type === 'iframe-height' && iframeRef.current) {
         iframeRef.current.style.height = e.data.height + 'px';
       }

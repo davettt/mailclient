@@ -117,8 +117,7 @@ export default function Compose({
       const fwdIds = fwdAttachments.map((a) => a.id);
 
       let newAttachments:
-        | { filename: string; content_base64: string; content_type: string }[]
-        | undefined;
+        { filename: string; content_base64: string; content_type: string }[] | undefined;
       if (attachedFiles.length > 0) {
         newAttachments = await Promise.all(
           attachedFiles.map(async (file) => ({

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.3] - 2026-07-19
+
+### Security
+
+- Updated uuid from v10 to v14 (fixes buffer bounds check vulnerability in v3/v5/v6 functions)
+- Updated nodemailer from v6 to v9 (fixes SMTP injection, SSRF, DoS, CRLF injection, and improper TLS validation advisories)
+- Added eslint-plugin-security with recommended rules for static code analysis
+
+### Added
+
+- MIT license for open-source release
+- Build-policy compliance infrastructure: GitHub Actions CI workflow, Dependabot automation, husky pre-commit hooks, dependency allowlist, AGENTS.md documentation
+
+### Changed
+
+- Updated all dependencies to latest within semver ranges
+- Fixed Prettier formatting inconsistencies in 8 source files
+- Aligned .gitignore with build-policy shared template ahead of making repo public (now ignores CLAUDE.md, CLAUDE.local.md, AGENTS.md, release/, .policy/)
+
 ## [0.4.2] - 2026-05-12
 
 ### Added

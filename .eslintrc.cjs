@@ -7,17 +7,20 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
-  plugins: ['@typescript-eslint', 'react-hooks', 'import'],
+  plugins: ['@typescript-eslint', 'react-hooks', 'import', 'security'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:react-hooks/recommended',
+    'plugin:security/recommended-legacy',
   ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     'import/order': ['warn', { 'newlines-between': 'never' }],
     'no-console': 'off',
+    'security/detect-object-injection': 'off',
+    'security/detect-non-literal-fs-filename': 'off',
   },
   ignorePatterns: ['dist/', 'node_modules/', '*.cjs'],
 };

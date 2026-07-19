@@ -31,7 +31,9 @@ export function decrypt(ciphertext: string): string {
   const iv = data.subarray(0, IV_LENGTH);
   const tag = data.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
   const encrypted = data.subarray(IV_LENGTH + TAG_LENGTH);
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
+    authTagLength: TAG_LENGTH,
+  });
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }

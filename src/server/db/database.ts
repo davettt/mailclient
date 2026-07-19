@@ -145,8 +145,7 @@ try {
 
 // One-time reset: re-score all messages with updated brand detection logic
 const spamV2 = db.prepare("SELECT value FROM settings WHERE key = 'spam_v2_reset'").get() as
-  | { value: string }
-  | undefined;
+  { value: string } | undefined;
 if (!spamV2) {
   db.exec("UPDATE messages SET spam_score = 0, spam_signals = '[]'");
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('spam_v2_reset', '1')").run();

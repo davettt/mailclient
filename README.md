@@ -2,6 +2,8 @@
 
 A lightweight local email client built with Express, React, and SQLite. Connects to any standard IMAP/SMTP mail server.
 
+> **Disclaimer:** This software is provided as-is with no warranty or guarantee. Use at your own risk. See [LICENSE](LICENSE) for details.
+
 ## Features
 
 - **IMAP/SMTP support** — Connect any standard mail server (Gmail, Fastmail, Outlook, Yahoo, ProtonMail Bridge, self-hosted, etc.)

@@ -9,8 +9,7 @@ const router = Router();
 
 function getSpamWhitelist(): string[] {
   const row = db.prepare("SELECT value FROM settings WHERE key = 'spamWhitelist'").get() as
-    | { value: string }
-    | undefined;
+    { value: string } | undefined;
   if (!row) return [];
   try {
     return JSON.parse(row.value);
@@ -319,8 +318,7 @@ router.delete('/spam-whitelist/:domain', (req: Request, res: Response) => {
 // Attachment endpoints (must be before /:id catch-all)
 router.get('/attachment/:attachmentId', (req: Request, res: Response) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id = ?').get(req.params.attachmentId) as
-    | AttachmentRow
-    | undefined;
+    AttachmentRow | undefined;
 
   if (!att || !att.content) {
     res.status(404).json({ error: 'Attachment not found' });
@@ -343,8 +341,7 @@ router.get('/attachment/:attachmentId', (req: Request, res: Response) => {
 
 router.get('/:id/attachments', async (req: Request, res: Response) => {
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-    | MessageRow
-    | undefined;
+    MessageRow | undefined;
 
   if (!message) {
     res.status(404).json({ error: 'Message not found' });
@@ -507,8 +504,7 @@ router.get('/thread/:threadId', (req: Request, res: Response) => {
 // Get raw headers for a message
 router.get('/:id/headers', async (req: Request, res: Response) => {
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-    | MessageRow
-    | undefined;
+    MessageRow | undefined;
 
   if (!message) {
     res.status(404).json({ error: 'Message not found' });
@@ -546,8 +542,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
   try {
     const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-      | MessageRow
-      | undefined;
+      MessageRow | undefined;
 
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
@@ -607,8 +602,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 router.post('/:id/spam', async (req: Request, res: Response) => {
   try {
     const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-      | MessageRow
-      | undefined;
+      MessageRow | undefined;
 
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
@@ -661,8 +655,7 @@ router.post('/:id/spam', async (req: Request, res: Response) => {
 router.post('/:id/archive', async (req: Request, res: Response) => {
   try {
     const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-      | MessageRow
-      | undefined;
+      MessageRow | undefined;
 
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
@@ -730,8 +723,7 @@ router.post('/:id/archive', async (req: Request, res: Response) => {
 router.post('/:id/not-spam', (req: Request, res: Response) => {
   try {
     const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-      | MessageRow
-      | undefined;
+      MessageRow | undefined;
 
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
@@ -769,8 +761,7 @@ router.post('/:id/move', async (req: Request, res: Response) => {
 
   try {
     const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-      | MessageRow
-      | undefined;
+      MessageRow | undefined;
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
       return;
@@ -816,8 +807,7 @@ router.post('/:id/move', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.id) as
-      | MessageRow
-      | undefined;
+      MessageRow | undefined;
 
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
@@ -884,8 +874,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.delete('/trash/:accountId', async (req: Request, res: Response) => {
   try {
     const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(req.params.accountId) as
-      | AccountRow
-      | undefined;
+      AccountRow | undefined;
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;
@@ -937,8 +926,7 @@ router.delete('/trash/:accountId', async (req: Request, res: Response) => {
 router.delete('/spam/:accountId', async (req: Request, res: Response) => {
   try {
     const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(req.params.accountId) as
-      | AccountRow
-      | undefined;
+      AccountRow | undefined;
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;
@@ -1057,8 +1045,7 @@ router.get('/search/:accountId', async (req: Request, res: Response) => {
   if (deep && query.length >= 3) {
     try {
       const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as
-        | AccountRow
-        | undefined;
+        AccountRow | undefined;
       if (account) {
         await imapService.searchServer(account, query);
       }
@@ -1084,8 +1071,7 @@ router.post('/send', async (req: Request, res: Response) => {
 
   try {
     const account = db.prepare('SELECT * FROM accounts WHERE id = ?').get(data.account_id) as
-      | AccountRow
-      | undefined;
+      AccountRow | undefined;
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
       return;
@@ -1095,8 +1081,7 @@ router.post('/send', async (req: Request, res: Response) => {
     if (data.forward_attachment_ids && data.forward_attachment_ids.length > 0) {
       for (const attId of data.forward_attachment_ids) {
         const att = db.prepare('SELECT * FROM attachments WHERE id = ?').get(attId) as
-          | AttachmentRow
-          | undefined;
+          AttachmentRow | undefined;
         if (att?.content) {
           attachments.push({
             filename: att.filename,

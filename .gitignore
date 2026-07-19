@@ -3,6 +3,7 @@ node_modules/
 
 # Build
 dist/
+release/
 .last-build
 
 # Environment
@@ -26,6 +27,11 @@ logs/
 .vscode/
 .idea/
 
-# Claude Code
+# AI tool context — local-only, carried between machines by file sync, never public
 .claude/
 CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+
+# Policy machinery state
+.policy/
