@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.4] - 2026-07-19
+
+### Fixed
+
+- File attachment race condition where browser could invalidate FileList reference before state update, causing attachments to silently fail
+- JSON body size limit increased from 10MB to 50MB to support larger file attachments (e.g. zip files)
+- CI workflow missing semgrep exclusion for `unsafe-formatstring` false positive
+- Dependabot config removed unsupported `cooldown` field
+- Dark mode email rendering: emails with their own background styling now render as-is on a light background (matching Gmail/Apple Mail behavior) instead of forcing unreadable dark mode overrides
+
 ## [0.4.3] - 2026-07-19
 
 ### Security
