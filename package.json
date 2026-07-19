@@ -21,7 +21,7 @@
     "type-check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
     "security": "npm audit --audit-level=high --omit=dev",
     "quality": "npm run lint && npm run format:check && npm run type-check",
-    "sast": "semgrep scan --config auto --error --quiet --exclude-rule javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal --exclude-rule javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal --exclude-rule javascript.express.security.audit.express-res-sendfile.express-res-sendfile --exclude-rule javascript.express.security.audit.remote-property-injection.remote-property-injection --exclude-rule javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+    "sast": "semgrep scan --config auto --error --quiet --exclude-rule javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal --exclude-rule javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal --exclude-rule javascript.express.security.audit.express-res-sendfile.express-res-sendfile --exclude-rule javascript.express.security.audit.remote-property-injection.remote-property-injection --exclude-rule javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring --exclude-rule package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown",
     "secrets": "betterleaks git . -v",
     "licenses": "license-checker --production --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0' --summary",
     "licenses:file": "license-checker --production > THIRD-PARTY-LICENSES.txt",

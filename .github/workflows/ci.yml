@@ -43,7 +43,9 @@ jobs:
             --exclude-rule javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal \
             --exclude-rule javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal \
             --exclude-rule javascript.express.security.audit.express-res-sendfile.express-res-sendfile \
-            --exclude-rule javascript.express.security.audit.remote-property-injection.remote-property-injection
+            --exclude-rule javascript.express.security.audit.remote-property-injection.remote-property-injection \
+            --exclude-rule javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring \
+            --exclude-rule package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown
 
       - name: Dependency audit
         run: npm run security

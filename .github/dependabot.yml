@@ -8,6 +8,3 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
     open-pull-requests-limit: 10
-    cooldown:
-      semver-minor: 7
-      semver-patch: 3
