@@ -7,8 +7,10 @@
 - File attachment race condition where browser could invalidate FileList reference before state update, causing attachments to silently fail
 - JSON body size limit increased from 10MB to 50MB to support larger file attachments (e.g. zip files)
 - CI workflow missing semgrep exclusion for `unsafe-formatstring` false positive
-- Dependabot config removed unsupported `cooldown` field
+- Dependabot config: removed invalid `cooldown` keys (later restored with valid `default-days` syntax)
 - Dark mode email rendering: emails with their own background styling now render as-is on a light background (matching Gmail/Apple Mail behavior) instead of forcing unreadable dark mode overrides
+- Restored Dependabot `cooldown` field with valid syntax (`default-days: 7`)
+- Removed global Semgrep rule exclusions from sast script and ci.yml; moved `unsafe-formatstring` findings to per-line `// nosemgrep` comments in imap.ts per updated build-policy standards
 
 ## [0.4.3] - 2026-07-19
 

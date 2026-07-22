@@ -304,7 +304,7 @@ export class ImapService {
               batchInsert(batch.splice(0));
             }
           } catch (err) {
-            console.error(`Failed to process message UID ${msg.uid}:`, err);
+            console.error(`Failed to process message UID ${msg.uid}:`, err); // nosemgrep: unsafe-formatstring
           }
         }
       } catch (err: any) {
@@ -692,7 +692,7 @@ export class ImapService {
         totalInserted += inserted;
         console.log(`  ${folder.name}: found ${inserted} new messages`);
       } catch (err) {
-        console.error(`  ${folder.name}: search failed -`, (err as Error).message);
+        console.error(`  ${folder.name}: search failed -`, (err as Error).message); // nosemgrep: unsafe-formatstring
       }
     }
 
