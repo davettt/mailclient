@@ -563,6 +563,7 @@ export default function MessageView({
               const isActive = tm.id === message.id;
               const tmFrom = extractName(tm.from_name, tm.from_address);
               const tmTo = parseAddresses(tm.to_addresses);
+              const tmCc = tm.cc_addresses ? parseAddresses(tm.cc_addresses) : [];
 
               return (
                 <div key={tm.id}>
@@ -680,6 +681,29 @@ export default function MessageView({
                                 </React.Fragment>
                               ))}
                             </div>
+                            {tmCc.length > 0 && (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: 'var(--text-tertiary)',
+                                  marginTop: 2,
+                                }}
+                              >
+                                cc{' '}
+                                {tmCc.map((a, i) => (
+                                  <React.Fragment key={a.address + i}>
+                                    {i > 0 && ', '}
+                                    <ClickableAddress
+                                      name={a.name || undefined}
+                                      address={a.address}
+                                      onClick={() => onComposeTo(a.address, a.name || undefined)}
+                                      style={{ fontSize: 12 }}
+                                      compact
+                                    />
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            )}
                             <div
                               style={{
                                 fontSize: 12,
@@ -796,24 +820,24 @@ export default function MessageView({
                       />
                     </React.Fragment>
                   ))}
-                  {ccAddrs.length > 0 && (
-                    <span>
-                      {' · cc: '}
-                      {ccAddrs.map((a, i) => (
-                        <React.Fragment key={a.address + i}>
-                          {i > 0 && ', '}
-                          <ClickableAddress
-                            name={a.name || undefined}
-                            address={a.address}
-                            onClick={() => onComposeTo(a.address, a.name || undefined)}
-                            style={{ fontSize: 12 }}
-                            compact
-                          />
-                        </React.Fragment>
-                      ))}
-                    </span>
-                  )}
                 </div>
+                {ccAddrs.length > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    cc{' '}
+                    {ccAddrs.map((a, i) => (
+                      <React.Fragment key={a.address + i}>
+                        {i > 0 && ', '}
+                        <ClickableAddress
+                          name={a.name || undefined}
+                          address={a.address}
+                          onClick={() => onComposeTo(a.address, a.name || undefined)}
+                          style={{ fontSize: 12 }}
+                          compact
+                        />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                   {formatDate(message.date)}
                 </div>
