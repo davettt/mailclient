@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, Account, Folder, Message, Signature } from './hooks/api';
-import { sortFolders, parseAddresses } from './hooks/utils';
+import { sortFolders, parseAddresses, formatAddress } from './hooks/utils';
 import Sidebar from './components/Sidebar';
 import MessageListComp from './components/MessageList';
 import MessageView from './components/MessageView';
@@ -776,9 +776,7 @@ export default function App() {
     const fromName = msg.from_name || fromAddr;
     const to = msg.from_address.includes('<')
       ? msg.from_address
-      : msg.from_name
-        ? `${msg.from_name} <${fromAddr}>`
-        : fromAddr;
+      : formatAddress(msg.from_name, fromAddr);
     setShowCompose({
       to,
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
@@ -805,11 +803,7 @@ export default function App() {
     const uniqueRecipients = allRecipients.filter(
       (addr, idx, arr) => arr.findIndex((a) => a.address === addr.address) === idx,
     );
-    const formatAddr = (a: { name: string; address: string }) =>
-      a.name && a.name.toLowerCase() !== a.address.toLowerCase()
-        ? `${a.name} <${a.address}>`
-        : a.address;
-    const toField = uniqueRecipients.map(formatAddr).join(', ');
+    const toField = uniqueRecipients.map((a) => formatAddress(a.name, a.address)).join(', ');
 
     setShowCompose({
       to: toField,

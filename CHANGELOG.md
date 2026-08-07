@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Send failures now surface the mail server's actual SMTP rejection reason (e.g. "Mail server rejected the message: 552 Mailbox quota exceeded") instead of a generic "Failed to send message"
 - File attachment race condition where browser could invalidate FileList reference before state update, causing attachments to silently fail
 - JSON body size limit increased from 10MB to 50MB to support larger file attachments (e.g. zip files)
 - CI workflow missing semgrep exclusion for `unsafe-formatstring` false positive
@@ -11,6 +12,12 @@
 - Dark mode email rendering: emails with their own background styling now render as-is on a light background (matching Gmail/Apple Mail behavior) instead of forcing unreadable dark mode overrides
 - Restored Dependabot `cooldown` field with valid syntax (`default-days: 7`)
 - Removed global Semgrep rule exclusions from sast script and ci.yml; moved `unsafe-formatstring` findings to per-line `// nosemgrep` comments in imap.ts per updated build-policy standards
+- CI workflow re-synced to shared build-policy template — reverts semgrep exclusion creep (template briefly carried four unsanctioned global exclusions)
+- Reply and reply-all now quote display names containing special characters (commas, parentheses, angle brackets) per RFC 5322, via a new formatAddress helper in src/client/hooks/utils.ts. Previously an unquoted name like "Smith, John <a@b.com>" could split into two invalid recipients.
+
+### Changed
+
+- Send route now logs the sending account, SMTP host, recipient, message size and whether the send is a reply, so send failures can be traced to a specific account.
 
 ## [0.4.3] - 2026-07-19
 

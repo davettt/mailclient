@@ -128,3 +128,12 @@ export function accountColor(type: string): string {
 export function accountBgColor(type: string): string {
   return type === 'gmail' ? 'rgba(234,67,53,0.15)' : 'var(--accent-dim)';
 }
+
+// RFC 5322: a display name containing specials — commas, parentheses, angle
+// brackets, quotes — must be quoted, or the address parses wrong. An unquoted
+// "Smith, John <a@b.com>" splits into two bogus recipients.
+export function formatAddress(name: string | null | undefined, address: string): string {
+  if (!name || name.toLowerCase() === address.toLowerCase()) return address;
+  const escaped = name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return /[(),.:;<>@[\]\\"]/.test(name) ? `"${escaped}" <${address}>` : `${name} <${address}>`;
+}
