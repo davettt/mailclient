@@ -22,5 +22,14 @@ module.exports = {
     'security/detect-object-injection': 'off',
     'security/detect-non-literal-fs-filename': 'off',
   },
+  overrides: [
+    {
+      // Test harness runs on plain Node in a CommonJS package, so require() is
+      // the only module syntax available to it.
+      files: ['tests/**/*.js'],
+      parserOptions: { sourceType: 'script' },
+      rules: { '@typescript-eslint/no-var-requires': 'off' },
+    },
+  ],
   ignorePatterns: ['dist/', 'node_modules/', '*.cjs'],
 };

@@ -2,8 +2,13 @@
 
 ## [0.4.4] - 2026-07-19
 
+### Added
+
+- Smoke tests: tests/harness.js spawns built server on port 13200 against throwaway temp data dir, tests/smoke.js exercises all 31 API routes asserting no 5xx (previously test:smoke was a stub that only ran the build)
+
 ### Fixed
 
+- Send failures now surface the mail server's actual SMTP rejection reason (e.g. "Mail server rejected the message: 552 Mailbox quota exceeded") instead of a generic "Failed to send message"
 - File attachment race condition where browser could invalidate FileList reference before state update, causing attachments to silently fail
 - JSON body size limit increased from 10MB to 50MB to support larger file attachments (e.g. zip files)
 - CI workflow missing semgrep exclusion for `unsafe-formatstring` false positive
@@ -11,6 +16,16 @@
 - Dark mode email rendering: emails with their own background styling now render as-is on a light background (matching Gmail/Apple Mail behavior) instead of forcing unreadable dark mode overrides
 - Restored Dependabot `cooldown` field with valid syntax (`default-days: 7`)
 - Removed global Semgrep rule exclusions from sast script and ci.yml; moved `unsafe-formatstring` findings to per-line `// nosemgrep` comments in imap.ts per updated build-policy standards
+- CI workflow re-synced to shared build-policy template — reverts semgrep exclusion creep (template briefly carried four unsanctioned global exclusions)
+- Reply and reply-all now quote display names containing special characters (commas, parentheses, angle brackets) per RFC 5322, via a new formatAddress helper in src/client/hooks/utils.ts. Previously an unquoted name like "Smith, John <a@b.com>" could split into two invalid recipients.
+- CC recipients now show in the thread view. MessageView.tsx has two recipient headers; the single-message header rendered "to ... · cc: ..." but the thread-item header rendered only "to", so CC addresses on a message viewed within a thread were invisible. The data was always present and correctly sent — display only.
+
+### Changed
+
+- Send route now logs the sending account, SMTP host, recipient, message size and whether the send is a reply, so send failures can be traced to a specific account.
+- review script now passes --include-untracked so brand-new files are covered by the CodeRabbit review gate
+- CI workflow re-synced to shared build-policy template, which adds build and test steps to CI. Socket scanning stays local (npm wrapper at install time, `socket:scan` over Dependabot branches pre-merge) — the template deliberately carries no CI step and needs no repo secret.
+- Added socket:scan npm script (socket ci) per build-policy standards
 
 ## [0.4.3] - 2026-07-19
 

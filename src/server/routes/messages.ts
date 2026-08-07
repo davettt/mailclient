@@ -1101,6 +1101,15 @@ router.post('/send', async (req: Request, res: Response) => {
       }
     }
 
+    // Diagnostics: a send rejection is otherwise untraceable — the logs record
+    // neither which account it went out through nor how big the message was.
+    console.log(
+      `Sending via ${account.email} (smtp: ${account.smtp_host || account.imap_host}) ` +
+        `to="${data.to}" reply=${data.in_reply_to ? 'yes' : 'no'} ` +
+        `bytes=${Buffer.byteLength(data.body + (data.html || ''), 'utf8')} ` +
+        `attachments=${attachments.length}`,
+    );
+
     const rawMessage = await smtpService.send(account, {
       to: data.to,
       cc: data.cc,
@@ -1130,7 +1139,22 @@ router.post('/send', async (req: Request, res: Response) => {
     res.json({ sent: true });
   } catch (err: any) {
     console.error('Failed to send message:', err);
-    res.status(500).json({ error: 'Failed to send message' });
+    // Surface the mail server's own rejection reason (e.g. "552 Mailbox quota
+    // exceeded") — a bare "Failed to send" gives the user nothing to act on.
+    // Only echo a genuine SMTP reply (numeric responseCode), sanitised and
+    // capped, so arbitrary error text never reaches the client.
+    const smtpResponse =
+      typeof err?.responseCode === 'number' && typeof err?.response === 'string'
+        ? err.response
+            .replace(/[\r\n\t]+/g, ' ')
+            .trim()
+            .slice(0, 200)
+        : null;
+    res.status(500).json({
+      error: smtpResponse
+        ? `Mail server rejected the message: ${smtpResponse}`
+        : 'Failed to send message',
+    });
   }
 });
 
