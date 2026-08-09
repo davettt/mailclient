@@ -46,7 +46,7 @@
     "dompurify": "^3.4.1",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "imapflow": "^1.0.167",
+    "imapflow": "^1.6.5",
     "mailparser": "^3.7.1",
     "nodemailer": "^9.0.3",
     "react": "^18.3.1",
