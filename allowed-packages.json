@@ -301,5 +301,31 @@
     "weeklyDownloads": 212232594,
     "versions": 875,
     "verified": "2026-07-17"
+  },
+  "_installScripts": {
+    "better-sqlite3": "present when install-script tracking began (2026-10-10)",
+    "esbuild": "present when install-script tracking began (2026-10-10)"
+  },
+  "helmet": {
+    "repo": "git://github.com/helmetjs/helmet",
+    "publisher": "adam_baldwin",
+    "weeklyDownloads": 16186081,
+    "versions": 135,
+    "verified": "2026-10-10",
+    "lastPublished": "2026-07-12",
+    "repoArchived": false,
+    "maintenance": "maintained",
+    "successor": null,
+    "socket": {
+      "checked": "2026-10-10",
+      "status": "scored",
+      "supplyChain": 100,
+      "vulnerability": 100,
+      "deepSupplyChain": 100,
+      "deepVulnerability": 100,
+      "alerts": [],
+      "flagged": false
+    },
+    "notes": "Security headers (project-standards § Security Headers)"
   }
 }

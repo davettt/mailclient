@@ -6,6 +6,25 @@
 
 - Fonts (Instrument Sans and JetBrains Mono) are now bundled with the app instead of loading from Google on every launch. The app no longer contacts Google Fonts, and text displays correctly offline. Their SIL Open Font License 1.1 text ships beside them in `public/fonts/`.
 
+### Security
+
+- Server binds to 127.0.0.1 only instead of all network interfaces
+- Requests with a Host header other than the local app address are rejected with 403
+- CORS allows only the exact local app origins (`http://127.0.0.1:3200`, `http://localhost:3200`); the Vite dev origin is allowed outside production only
+- POST, PUT, PATCH and DELETE requests carrying a foreign Origin are rejected with 403
+- Added helmet with a Content Security Policy tuned for the app (inline theme bootstrap and sandboxed email iframe, remote images for email HTML), frameguard deny, no-referrer, and `X-Powered-By` removed
+- Upgraded nodemailer from 9.1.1 to 10.0.16 to resolve a high-severity npm audit advisory
+
+### Added
+
+- Integration tests (`tests/integration.js`, `npm run test:integration`) covering the network guards: foreign Host rejection, security headers, CORS origin restriction and cross-origin write rejection
+
+### Changed
+
+- Dependencies refreshed within allowed semver ranges (e.g. tiptap 3.31.4, mailparser 3.9.36, imapflow 1.7.8, express 4.22.3, dompurify 3.4.16, html-validate 11.16.2); `@types/nodemailer` removed since nodemailer 10 ships its own types
+- Vite dev proxy targets 127.0.0.1 with `changeOrigin` so dev requests pass the Host check
+- CI workflow, pre-commit hook and secrets scripts synced with shared build-policy templates (`betterleaks --redact`, `secrets:staged`, `.nvmrc` pinning Node 24.20.0)
+
 ## [0.4.4] - 2026-07-19
 
 ### Added

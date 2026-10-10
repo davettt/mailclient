@@ -63,6 +63,8 @@ src/
 
 ### 1. Install dependencies
 
+The project pins Node 24.20.0 in `.nvmrc`. Run `nvm use` first if you use nvm.
+
 ```bash
 npm install
 ```
@@ -75,6 +77,7 @@ cp .env.example .env
 
 ```env
 PORT=3200
+HOST=127.0.0.1   # Optional. Bind address (defaults to 127.0.0.1, local only)
 DATA_DIR=/Users/yourname/.mailclient-data   # Absolute path OUTSIDE cloud-synced folders
 ENCRYPTION_KEY=   # Required. Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
@@ -110,6 +113,8 @@ npm run pm2:stop
 ```
 
 The production server serves both the API and the static React build on port 3200.
+
+> **Local-only server:** The server binds to `127.0.0.1` by default, so it is reachable only from this machine at `http://localhost:3200` or `http://127.0.0.1:3200`. Requests with any other `Host` header are refused with 403, and state-changing requests from other websites are refused. Change `HOST` only if you understand the exposure.
 
 ## Adding an account
 

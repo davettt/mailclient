@@ -12,8 +12,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3200',
-      '/auth': 'http://localhost:3200',
+      // 127.0.0.1, not localhost: Node may resolve localhost to ::1, which the
+      // loopback-only server refuses. changeOrigin rewrites Host to pass the Host check.
+      '/api': { target: 'http://127.0.0.1:3200', changeOrigin: true },
+      '/auth': { target: 'http://127.0.0.1:3200', changeOrigin: true },
     },
   },
 });
