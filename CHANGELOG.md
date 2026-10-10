@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Privacy
+
+- Fonts (Instrument Sans and JetBrains Mono) are now bundled with the app instead of loading from Google on every launch. The app no longer contacts Google Fonts, and text displays correctly offline. Their SIL Open Font License 1.1 text ships beside them in `public/fonts/`.
+
 ## [0.4.4] - 2026-07-19
 
 ### Added
