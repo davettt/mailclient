@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.5] - 2026-10-16
+
+### Fixed
+
+- Reply and Reply All now go to the Reply-To address when a message has one, instead of the From address. Transactional senders whose From address bounces supply a Reply-To for replies. Reply-To is captured on IMAP sync and body fetch; messages already cached are backfilled from their stored headers when opened. New `reply_to` column on `messages` (migration)
 
 ### Privacy
 
@@ -14,6 +18,7 @@
 - POST, PUT, PATCH and DELETE requests carrying a foreign Origin are rejected with 403
 - Added helmet with a Content Security Policy tuned for the app (inline theme bootstrap and sandboxed email iframe, remote images for email HTML), frameguard deny, no-referrer, and `X-Powered-By` removed
 - Upgraded nodemailer from 9.1.1 to 10.0.16 to resolve a high-severity npm audit advisory
+- `npm audit fix` applied, clearing the critical concurrently and shell-quote advisories
 
 ### Added
 
@@ -24,6 +29,7 @@
 - Dependencies refreshed within allowed semver ranges (e.g. tiptap 3.31.4, mailparser 3.9.36, imapflow 1.7.8, express 4.22.3, dompurify 3.4.16, html-validate 11.16.2); `@types/nodemailer` removed since nodemailer 10 ships its own types
 - Vite dev proxy targets 127.0.0.1 with `changeOrigin` so dev requests pass the Host check
 - CI workflow, pre-commit hook and secrets scripts synced with shared build-policy templates (`betterleaks --redact`, `secrets:staged`, `.nvmrc` pinning Node 24.20.0)
+- Dependencies refreshed again within allowed semver ranges (tiptap 3.32.0, nodemailer 10.1.0, mailparser 3.9.38, dompurify 3.4.17, concurrently 9.2.5, prettier 3.9.10, uuid 14.0.3)
 
 ## [0.4.4] - 2026-07-19
 

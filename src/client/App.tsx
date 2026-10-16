@@ -771,12 +771,17 @@ export default function App() {
   };
 
   // ─── Compose helpers ───
+  // Reply-To overrides From as the reply target (e.g. no-reply transactional senders)
+  const replyTargets = (msg: Message) => {
+    const replyTo = msg.reply_to ? parseAddresses(msg.reply_to) : [];
+    return replyTo.length ? replyTo : [{ name: msg.from_name || '', address: msg.from_address }];
+  };
+
   const handleReply = (msg: Message) => {
-    const fromAddr = msg.from_address;
-    const fromName = msg.from_name || fromAddr;
-    const to = msg.from_address.includes('<')
-      ? msg.from_address
-      : formatAddress(msg.from_name, fromAddr);
+    const fromName = msg.from_name || msg.from_address;
+    const to = replyTargets(msg)
+      .map((a) => (a.address.includes('<') ? a.address : formatAddress(a.name, a.address)))
+      .join(', ');
     setShowCompose({
       to,
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
@@ -787,18 +792,15 @@ export default function App() {
   };
 
   const handleReplyAll = (msg: Message) => {
-    const fromAddr = msg.from_address;
-    const fromName = msg.from_name || fromAddr;
+    const fromName = msg.from_name || msg.from_address;
     const toAddrs = parseAddresses(msg.to_addresses);
     const ccAddrs = msg.cc_addresses ? parseAddresses(msg.cc_addresses) : [];
 
     const msgAccount = accounts.find((a) => a.id === msg.account_id);
     const currentEmail = msgAccount?.email || activeAccount?.email || '';
-    const allRecipients = [
-      { name: msg.from_name || '', address: fromAddr },
-      ...toAddrs,
-      ...ccAddrs,
-    ].filter((a) => a.address && a.address.toLowerCase() !== currentEmail.toLowerCase());
+    const allRecipients = [...replyTargets(msg), ...toAddrs, ...ccAddrs].filter(
+      (a) => a.address && a.address.toLowerCase() !== currentEmail.toLowerCase(),
+    );
 
     const uniqueRecipients = allRecipients.filter(
       (addr, idx, arr) => arr.findIndex((a) => a.address === addr.address) === idx,

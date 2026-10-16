@@ -45,6 +45,7 @@ export interface Message {
   to_addresses: string;
   cc_addresses?: string;
   bcc_addresses?: string;
+  reply_to?: string | null;
   subject: string;
   date: number;
   body_text?: string | null;

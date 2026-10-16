@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { simpleParser } from 'mailparser';
 import db, { AccountRow, AttachmentRow, FolderRow, MessageRow } from '../db/database';
-import { imapService } from '../services/imap';
+import { imapService, extractReplyTo } from '../services/imap';
 import { smtpService } from '../services/smtp';
 import { scoreSpam, SIGNAL_LABELS } from '../utils/spamCheck';
 
@@ -396,7 +397,7 @@ router.get('/:id/cid/:cid', (req: Request, res: Response) => {
 });
 
 const MESSAGE_COLS = `id, account_id, folder_id, uid, message_id, in_reply_to, "references",
-  from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
+  from_address, from_name, to_addresses, cc_addresses, bcc_addresses, reply_to,
   subject, date, body_text, body_html, snippet,
   is_read, is_starred, is_draft, has_attachments, flags, size, created_at, thread_id,
   spam_score, spam_signals`;
@@ -426,6 +427,23 @@ router.get('/:id', async (req: Request, res: Response) => {
           .get(message.id) as MessageRow) || message;
     } catch (err) {
       console.error('Failed to fetch message body:', err);
+    }
+  }
+
+  // Backfill Reply-To for messages cached before the column existed
+  if (message.reply_to === null) {
+    const row = db.prepare('SELECT raw_headers FROM messages WHERE id = ?').get(message.id) as
+      { raw_headers: string | null } | undefined;
+    if (row?.raw_headers) {
+      try {
+        // raw_headers lines are stored as "key: Key: value" — drop the lowercased key prefix
+        const headers = row.raw_headers.replace(/^([^\s:]+): (?=\1:)/gim, '');
+        const replyTo = extractReplyTo(await simpleParser(headers + '\r\n\r\n'));
+        db.prepare('UPDATE messages SET reply_to = ? WHERE id = ?').run(replyTo, message.id);
+        message = { ...message, reply_to: replyTo };
+      } catch (err) {
+        console.error('Failed to parse Reply-To:', err);
+      }
     }
   }
 

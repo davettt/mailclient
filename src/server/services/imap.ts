@@ -62,6 +62,13 @@ function extractEnvelopeAddresses(addrs: any[] | undefined): string {
   );
 }
 
+/** Reply-To addresses from a parsed message as a JSON array ('[]' when absent). */
+export function extractReplyTo(parsed: ParsedMail): string {
+  const field = parsed.replyTo;
+  const values = field ? (Array.isArray(field) ? field : [field]).flatMap((f) => f.value) : [];
+  return extractEnvelopeAddresses(values.filter((v) => v.address));
+}
+
 function hasAttachmentParts(structure: any): boolean {
   if (!structure) return false;
   if (structure.disposition === 'attachment') return true;
@@ -218,10 +225,10 @@ export class ImapService {
       const insertMsg = db.prepare(`
         INSERT OR IGNORE INTO messages (
           id, account_id, folder_id, uid, message_id, in_reply_to,
-          from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
+          from_address, from_name, to_addresses, cc_addresses, bcc_addresses, reply_to,
           subject, date,
           is_read, is_starred, is_draft, has_attachments, flags, size
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const updateUid = db.prepare(
@@ -288,6 +295,7 @@ export class ImapService {
               extractEnvelopeAddresses(env.to),
               extractEnvelopeAddresses(env.cc),
               extractEnvelopeAddresses(env.bcc),
+              extractEnvelopeAddresses(env.replyTo),
               env.subject || '(no subject)',
               env.date ? Math.floor(env.date.getTime() / 1000) : Math.floor(Date.now() / 1000),
               isRead,
@@ -457,7 +465,7 @@ export class ImapService {
           `UPDATE messages
            SET body_text = ?, body_html = ?, snippet = ?,
                raw_headers = ?, raw_source = ?, "references" = ?,
-               has_attachments = ?
+               has_attachments = ?, reply_to = ?
            WHERE id = ?`,
         ).run(
           parsed.text || null,
@@ -467,6 +475,7 @@ export class ImapService {
           msg.source.toString() || null,
           refs,
           hasAtts ? 1 : 0,
+          extractReplyTo(parsed),
           dbId,
         );
 
@@ -609,10 +618,10 @@ export class ImapService {
       const insertMsg = db.prepare(`
         INSERT OR IGNORE INTO messages (
           id, account_id, folder_id, uid, message_id, in_reply_to,
-          from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
+          from_address, from_name, to_addresses, cc_addresses, bcc_addresses, reply_to,
           subject, date,
           is_read, is_starred, is_draft, has_attachments, flags, size
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const batch: any[] = [];
@@ -635,6 +644,7 @@ export class ImapService {
           extractEnvelopeAddresses(env.to),
           extractEnvelopeAddresses(env.cc),
           extractEnvelopeAddresses(env.bcc),
+          extractEnvelopeAddresses(env.replyTo),
           env.subject || '(no subject)',
           env.date ? Math.floor(env.date.getTime() / 1000) : Math.floor(Date.now() / 1000),
           flags.includes('\\Seen') ? 1 : 0,

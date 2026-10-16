@@ -143,6 +143,13 @@ try {
   // Column already exists
 }
 
+// Migration: add Reply-To addresses (JSON array; NULL = not yet known)
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN reply_to TEXT');
+} catch {
+  // Column already exists
+}
+
 // One-time reset: re-score all messages with updated brand detection logic
 const spamV2 = db.prepare("SELECT value FROM settings WHERE key = 'spam_v2_reset'").get() as
   { value: string } | undefined;
@@ -287,6 +294,7 @@ export interface MessageRow {
   to_addresses: string;
   cc_addresses: string;
   bcc_addresses: string;
+  reply_to: string | null;
   subject: string;
   date: number;
   body_text: string | null;
