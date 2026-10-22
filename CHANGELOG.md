@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- Node.js runtime pin in `.nvmrc` moved from 24.20.0 to 24.22.1 to pick up the upstream Node.js security release
+
+### Changed
+
+- ESLint ignores `.claude/` so agent worktrees under `.claude/worktrees/` are no longer linted as duplicate copies of the source
+- `.husky/pre-commit` synced with the shared build-policy template
+
 ## [0.4.5] - 2026-10-16
 
 ### Fixed

@@ -31,5 +31,5 @@ module.exports = {
       rules: { '@typescript-eslint/no-var-requires': 'off' },
     },
   ],
-  ignorePatterns: ['dist/', 'node_modules/', '*.cjs'],
+  ignorePatterns: ['dist/', 'node_modules/', '*.cjs', '.claude/'],
 };
