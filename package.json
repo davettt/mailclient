@@ -50,7 +50,7 @@
     "express": "^4.21.0",
     "helmet": "^8.3.0",
     "imapflow": "^1.0.167",
-    "mailparser": "^3.7.1",
+    "mailparser": "^3.9.40",
     "nodemailer": "^10.0.16",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
